@@ -1,0 +1,5 @@
+export { WhatsappProviderHarness } from './whatsapp-provider.harness'
+export { WhatsappPersistenceHarness } from './whatsapp-persistence.harness'
+export { WhatsappEventHarness } from './whatsapp-event.harness'
+export { WhatsappDashboardHarness } from './whatsapp-dashboard.harness'
+export { QrCodeHarness } from './qr-code.harness'

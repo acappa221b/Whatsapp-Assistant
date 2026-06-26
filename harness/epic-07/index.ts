@@ -1,0 +1,6 @@
+export { VisionHarness } from './vision.harness'
+export { MediaStorageHarness } from './media-storage.harness'
+export { ImageProcessorHarness } from './image-processor.harness'
+export { DocumentProcessorHarness } from './document-processor.harness'
+export { MediaSecurityHarness } from './media-security.harness'
+export { ExtractionMetadataHarness } from './extraction-metadata.harness'

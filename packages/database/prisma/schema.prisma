@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ExpenseSource {
+  MANUAL
+  WHATSAPP_TEXT
+  WHATSAPP_IMAGE
+  OCR
+  IMPORT
+}
+
+enum CategoryType {
+  EXPENSE
+  REVENUE
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(VIEWER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        String       @id @default(cuid())
+  name      String
+  type      CategoryType
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  expenses  Expense[]
+
+  @@unique([name, type])
+}
+
+model Supplier {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  document  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  expenses  Expense[]
+}
+
+model Expense {
+  id          String        @id @default(cuid())
+  description String
+  amount      Float
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  supplierId  String?
+  supplier    Supplier?     @relation(fields: [supplierId], references: [id])
+  date        DateTime
+  source      ExpenseSource
+  confidence  Float         @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  attachments Attachment[]
+
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([date])
+  @@index([deletedAt])
+}
+
+model Revenue {
+  id          String        @id @default(cuid())
+  description String
+  amount      Float
+  date        DateTime
+  source      ExpenseSource
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  @@index([date])
+  @@index([deletedAt])
+}
+
+model Attachment {
+  id        String  @id @default(cuid())
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  filePath  String
+  ocrText   String?
+}
+
+enum MessageType {
+  TEXT
+  AUDIO
+  IMAGE
+  DOCUMENT
+  VIDEO
+  STICKER
+  REACTION
+  CONTACT
+  LOCATION
+  POLL
+  SYSTEM
+  UNKNOWN
+}
+
+enum ApiUsageCategory {
+  agent_message
+  photo_processing
+  audio_processing
+  report_generation
+  other
+}
+
+model WhatsappChatConfig {
+  chatId                   String    @id
+  displayNumber            Int       @unique
+  name                     String?
+  storageDir               String?
+  archiveEnabled           Boolean   @default(false)
+  aiProcessingEnabled      Boolean   @default(false)
+  agentChatEnabled         Boolean   @default(false)
+  photoProcessingEnabled   Boolean   @default(false)
+  audioProcessingEnabled   Boolean   @default(false)
+  reportGenerationEnabled  Boolean   @default(false)
+  agentPaused              Boolean   @default(false)
+  agentPausedReason        String?
+  agentPausedAt            DateTime?
+  updatedAt                DateTime  @updatedAt
+
+  @@index([archiveEnabled])
+}
+
+model WhatsappMessage {
+  id                String      @id @default(cuid())
+  externalMessageId String      @unique
+  chatId            String
+  chatName          String?
+  sender            String
+  senderId          String
+  senderName        String?
+  content           String
+  messageType       MessageType @default(TEXT)
+  rawPayload        Json
+  mediaUrl          String?
+  mimeType          String?
+  fileName          String?
+  fileSize          Int?
+  storagePath       String?
+  fromMe            Boolean     @default(false)
+  sourceAgent       Boolean     @default(false)
+  processed         Boolean     @default(false)
+  receivedAt        DateTime
+  createdAt         DateTime    @default(now())
+  extractions       Extraction[]
+
+  @@index([chatId])
+  @@index([processed])
+  @@index([receivedAt])
+  @@index([senderId])
+  @@index([messageType])
+}
+
+enum ExtractionType {
+  EXPENSE_CANDIDATE
+  REVENUE_CANDIDATE
+  UNKNOWN
+}
+
+model Extraction {
+  id               String          @id @default(cuid())
+  messageId        String
+  message          WhatsappMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type             ExtractionType
+  sourceType       MessageType
+  confidence       Float
+  data             Json
+  processingTimeMs Int?
+  tokensInput      Int?
+  tokensOutput     Int?
+  storagePath      String?
+  model            String
+  createdAt        DateTime        @default(now())
+
+  @@index([messageId])
+  @@index([type])
+  @@index([sourceType])
+  @@index([createdAt])
+}
+
+model ApprovalQueue {
+  id        String   @id @default(cuid())
+  expenseId String   @unique
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String?
+  action    String
+  actorId   String?
+  before    String?
+  after     String?
+  createdAt DateTime @default(now())
+}
+
+model ApiTokenUsage {
+  id           String           @id @default(cuid())
+  occurredAt   DateTime         @default(now())
+  category     ApiUsageCategory
+  chatId       String?
+  messageId    String?
+  model        String
+  tokensInput  Int
+  tokensOutput Int
+  tokensTotal  Int
+  costBrl      Float
+  metadata     Json?
+
+  @@index([occurredAt])
+  @@index([category])
+  @@index([chatId])
+}
+
+model ConversationDailyReport {
+  id           String   @id @default(cuid())
+  chatId       String
+  reportDate   DateTime
+  content      String
+  bullets      Json
+  tokensInput  Int      @default(0)
+  tokensOutput Int      @default(0)
+  generatedAt  DateTime @default(now())
+
+  @@unique([chatId, reportDate])
+  @@index([reportDate])
+}

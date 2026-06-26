@@ -1,0 +1,552 @@
+import { config } from '@finance-ai/shared/config'
+import { ChatIdentityResolver } from '@finance-ai/shared/utils'
+import { InMemoryEventBus } from '@finance-ai/core/events'
+import { DomainEvents } from '@finance-ai/core/events'
+import {
+  AgentAutoReplyPipeline,
+  AgentOutboundTracker,
+  AgentReplyDeduplicator,
+  HandleHumanTakeoverUseCase,
+  PauseAgentAfterDeferralUseCase,
+  ProcessAgentAutoReplyUseCase,
+} from '@finance-ai/core/domains/agent-chat'
+import { RecordApiTokenUsageUseCase } from '@finance-ai/core/domains/api-token-usage'
+import { MediaProcessingPipeline } from '@finance-ai/core/domains/message-processing'
+import { OpenAIChatProvider } from '@finance-ai/ai'
+import {
+  BackfillWhatsappMessageNamesUseCase,
+  DeleteChatHistoryUseCase,
+  GetMessageArchiveMetricsUseCase,
+  GetMessageFidelityMetricsUseCase,
+  ListWhatsappChatArchiveUseCase,
+  ListWhatsappMessagesUseCase,
+  MarkWhatsappMessageProcessedUseCase,
+  StoreWhatsappMessageUseCase,
+} from '@finance-ai/core/domains/whatsapp-message'
+import {
+  EnsureWhatsappChatDiscoveredUseCase,
+  ListWhatsappChatConfigsUseCase,
+  ResolveChatNamesUseCase,
+  UpdateWhatsappChatConfigUseCase,
+} from '@finance-ai/core/domains/whatsapp-chat-config'
+import {
+  prisma,
+  WhatsappChatConfigPrismaRepository,
+  WhatsappMessagePrismaRepository,
+  ApiTokenUsagePrismaRepository,
+} from '@finance-ai/database'
+import {
+  BaileysWhatsappProvider,
+  ContactNameResolver,
+  getMessageCaptureMetrics,
+  getOwnJidFromAuthSession,
+  isValidAuthSession,
+  WhatsappConnectionPipeline,
+  WhatsappMessagePipeline,
+  type IncomingMessage,
+  type WhatsappProvider,
+  type WhatsappStatus,
+} from '@finance-ai/whatsapp'
+
+import {
+  checkRuntimeIntegrity,
+  WHATSAPP_RUNTIME_VERSION,
+  type RuntimeHealth,
+} from './runtime-integrity'
+import { buildArchiveHealthSnapshot } from '@finance-ai/core/domains/message-archive'
+import { bootstrapWhatsappNames } from './name-bootstrap'
+import { repairHistoricalMessages } from './repair-historical-messages'
+import { deleteStoredMediaFile, createChatMediaCleanup } from '@/lib/media-storage'
+import { createChatNameResolverPort } from './chat-name-resolution.adapter'
+import { ChatMediaStorage } from '@finance-ai/shared/storage'
+import { registerDailyReportJob } from '@/lib/jobs/daily-report.job'
+
+export { WHATSAPP_RUNTIME_VERSION, checkRuntimeIntegrity, type RuntimeHealth } from './runtime-integrity'
+
+function logRc02EventBusPublish(name: string, payload: Record<string, unknown>): void {
+  console.info('[RC-02/EVENT_BUS_PUBLISH]', {
+    at: new Date().toISOString(),
+    name,
+    ...payload,
+  })
+}
+
+type WhatsappRuntime = {
+  eventBus: InMemoryEventBus
+  provider: WhatsappProvider
+  messageRepository: WhatsappMessagePrismaRepository
+  chatConfigRepository: WhatsappChatConfigPrismaRepository
+  storeUseCase: StoreWhatsappMessageUseCase
+  listUseCase: ListWhatsappMessagesUseCase
+  listChatArchiveUseCase: ListWhatsappChatArchiveUseCase
+  metricsUseCase: GetMessageArchiveMetricsUseCase
+  markProcessedUseCase: MarkWhatsappMessageProcessedUseCase
+  ensureChatDiscoveredUseCase: EnsureWhatsappChatDiscoveredUseCase
+  backfillNamesUseCase: BackfillWhatsappMessageNamesUseCase
+  listChatConfigsUseCase: ListWhatsappChatConfigsUseCase
+  updateChatConfigUseCase: UpdateWhatsappChatConfigUseCase
+  deleteChatHistoryUseCase: DeleteChatHistoryUseCase
+  resolveChatNamesUseCase: ResolveChatNamesUseCase
+  fidelityUseCase: GetMessageFidelityMetricsUseCase
+  contactNameResolver: ContactNameResolver
+}
+
+export type WhatsappOperationalStatus = {
+  status: WhatsappStatus['status']
+  connected: boolean
+  authenticated: boolean
+  sessionLoaded: boolean
+  qrCode: string | null
+  qrCodeDataUrl: string | null
+  lastConnectedAt: string | null
+  messageCount: number
+  liveMessageCount: number
+  chatCount: number
+  groupCount: number
+  lastMessageAt: string | null
+  lastEventAt: string | null
+  lastEventName: string | null
+  operationalMessage: string | null
+}
+
+type StatusListener = (status: WhatsappStatus) => void
+
+const globalForWhatsapp = globalThis as unknown as {
+  whatsappRuntime?: WhatsappRuntime
+  whatsappRuntimeVersion?: number
+  whatsappStatusListeners?: Set<StatusListener>
+  whatsappPipelinesRegistered?: boolean
+  whatsappBootstrapPromise?: Promise<void>
+  whatsappOperational?: {
+    sessionLoaded: boolean
+    lastMessageAt: Date | null
+    lastEventAt: Date | null
+    lastEventName: string | null
+  }
+}
+
+function getOperationalState() {
+  if (!globalForWhatsapp.whatsappOperational) {
+    globalForWhatsapp.whatsappOperational = {
+      sessionLoaded: isValidAuthSession(config.whatsapp.sessionPath),
+      lastMessageAt: null,
+      lastEventAt: null,
+      lastEventName: null,
+    }
+  }
+  return globalForWhatsapp.whatsappOperational
+}
+
+function recordOperationalEvent(eventName: string): void {
+  const state = getOperationalState()
+  state.lastEventAt = new Date()
+  state.lastEventName = eventName
+}
+
+function createRuntime(): WhatsappRuntime {
+  console.info('[RUNTIME_INIT]', {
+    at: new Date().toISOString(),
+    version: WHATSAPP_RUNTIME_VERSION,
+  })
+  const eventBus = new InMemoryEventBus()
+  const messageRepository = new WhatsappMessagePrismaRepository(prisma)
+  const chatConfigRepository = new WhatsappChatConfigPrismaRepository(prisma)
+  const ensureChatDiscoveredUseCase = new EnsureWhatsappChatDiscoveredUseCase(chatConfigRepository)
+  const backfillNamesUseCase = new BackfillWhatsappMessageNamesUseCase(messageRepository)
+  const configNameCache = new Map<string, string>()
+
+  const refreshConfigNameCache = async () => {
+    const configs = await chatConfigRepository.findAll()
+    configNameCache.clear()
+    for (const config of configs) {
+      if (config.name?.trim()) configNameCache.set(config.chatId, config.name.trim())
+    }
+  }
+
+  const contactNameResolver = new ContactNameResolver({
+    ownJid: getOwnJidFromAuthSession(config.whatsapp.sessionPath),
+    chatNameLookup: (chatId) => configNameCache.get(chatId) ?? null,
+    onGroupNameResolved: async (chatId, name) => {
+      recordOperationalEvent('groups.metadata')
+      configNameCache.set(chatId, name)
+      await ensureChatDiscoveredUseCase.execute(chatId, name)
+      await backfillNamesUseCase.execute({ chatId, chatName: name })
+    },
+  })
+
+  const handleNameDiscovered = async (chatId: string, name?: string | null) => {
+    recordOperationalEvent('chats.upsert')
+    const trimmed = name?.trim()
+    if (!trimmed) {
+      await ensureChatDiscoveredUseCase.execute(chatId)
+      return
+    }
+    configNameCache.set(chatId, trimmed)
+    await ensureChatDiscoveredUseCase.execute(chatId, trimmed)
+    await backfillNamesUseCase.execute({ chatId, chatName: trimmed })
+  }
+
+  const handleContactDiscovered = async (jid: string, name: string) => {
+    recordOperationalEvent('contacts.upsert')
+    await backfillNamesUseCase.execute({ senderId: jid, senderName: name })
+    if (!jid.endsWith('@g.us')) {
+      configNameCache.set(jid, name)
+      await ensureChatDiscoveredUseCase.execute(jid, name)
+      await backfillNamesUseCase.execute({ chatId: jid, chatName: name })
+    }
+  }
+
+  let nameBootstrapDone = false
+
+  const chatMediaStorage = new ChatMediaStorage()
+  const resolveChatNamesUseCase = new ResolveChatNamesUseCase(
+    chatConfigRepository,
+    createChatNameResolverPort(prisma, contactNameResolver),
+  )
+
+  const handleConnectionOpen = async () => {
+    if (nameBootstrapDone) return
+    nameBootstrapDone = true
+    contactNameResolver.setOwnJid(getOwnJidFromAuthSession(config.whatsapp.sessionPath))
+    await refreshConfigNameCache()
+    await bootstrapWhatsappNames({
+      prisma,
+      resolver: contactNameResolver,
+      ensureChatDiscovered: ensureChatDiscoveredUseCase,
+      backfillNames: backfillNamesUseCase,
+      resolveChatNames: resolveChatNamesUseCase,
+      chatMediaStorage,
+    })
+    const ownJid = getOwnJidFromAuthSession(config.whatsapp.sessionPath)
+    const repair = await repairHistoricalMessages({
+      prisma,
+      ownJid,
+      sampleWrappers: true,
+    })
+    if (repair.contentRepaired > 0 || repair.chatsRenamed > 0) {
+      console.info('[RC-07/repair-historical]', repair)
+    }
+  }
+
+  const provider = new BaileysWhatsappProvider({
+    contactNameResolver,
+    onChatDiscovered: handleNameDiscovered,
+    onContactDiscovered: handleContactDiscovered,
+    onConnectionOpen: handleConnectionOpen,
+  })
+
+  const storeUseCase = new StoreWhatsappMessageUseCase(messageRepository, eventBus)
+  const listUseCase = new ListWhatsappMessagesUseCase(messageRepository)
+  const listChatArchiveUseCase = new ListWhatsappChatArchiveUseCase(messageRepository)
+  const metricsUseCase = new GetMessageArchiveMetricsUseCase(messageRepository)
+  const fidelityUseCase = new GetMessageFidelityMetricsUseCase(messageRepository)
+  const markProcessedUseCase = new MarkWhatsappMessageProcessedUseCase(messageRepository, eventBus)
+  const listChatConfigsUseCase = new ListWhatsappChatConfigsUseCase(chatConfigRepository)
+  const updateChatConfigUseCase = new UpdateWhatsappChatConfigUseCase(chatConfigRepository)
+  const deleteChatHistoryUseCase = new DeleteChatHistoryUseCase(
+    messageRepository,
+    chatConfigRepository,
+    createChatMediaCleanup(),
+    eventBus,
+  )
+
+  return {
+    eventBus,
+    provider,
+    messageRepository,
+    chatConfigRepository,
+    storeUseCase,
+    listUseCase,
+    listChatArchiveUseCase,
+    metricsUseCase,
+    markProcessedUseCase,
+    ensureChatDiscoveredUseCase,
+    backfillNamesUseCase,
+    listChatConfigsUseCase,
+    updateChatConfigUseCase,
+    deleteChatHistoryUseCase,
+    resolveChatNamesUseCase,
+    fidelityUseCase,
+    contactNameResolver,
+  }
+}
+
+function invalidateRuntimeCache(reason: string, health?: RuntimeHealth): void {
+  console.warn('[RUNTIME_INVALID]', {
+    at: new Date().toISOString(),
+    reason,
+    version: globalForWhatsapp.whatsappRuntimeVersion,
+    expectedVersion: WHATSAPP_RUNTIME_VERSION,
+    missing: health?.missing ?? [],
+  })
+  globalForWhatsapp.whatsappRuntime = undefined
+  globalForWhatsapp.whatsappRuntimeVersion = undefined
+  globalForWhatsapp.whatsappPipelinesRegistered = false
+  globalForWhatsapp.whatsappBootstrapPromise = undefined
+}
+
+function needsRuntimeRebuild(): boolean {
+  if (!globalForWhatsapp.whatsappRuntime) return true
+  if (globalForWhatsapp.whatsappRuntimeVersion !== WHATSAPP_RUNTIME_VERSION) return true
+  const health = checkRuntimeIntegrity(globalForWhatsapp.whatsappRuntime)
+  return !health.valid
+}
+
+export function getRuntimeHealth(): RuntimeHealth {
+  if (!globalForWhatsapp.whatsappRuntime) {
+    return { valid: false, version: WHATSAPP_RUNTIME_VERSION, missing: ['whatsappRuntime'] }
+  }
+  return checkRuntimeIntegrity(globalForWhatsapp.whatsappRuntime)
+}
+
+export function getWhatsappRuntime(): WhatsappRuntime {
+  if (needsRuntimeRebuild()) {
+    const priorHealth = globalForWhatsapp.whatsappRuntime
+      ? checkRuntimeIntegrity(globalForWhatsapp.whatsappRuntime)
+      : undefined
+    if (globalForWhatsapp.whatsappRuntime) {
+      console.info('[RUNTIME_REBUILD]', {
+        at: new Date().toISOString(),
+        fromVersion: globalForWhatsapp.whatsappRuntimeVersion,
+        toVersion: WHATSAPP_RUNTIME_VERSION,
+        missing: priorHealth?.missing ?? [],
+      })
+      invalidateRuntimeCache('integrity-or-version-mismatch', priorHealth)
+    }
+    globalForWhatsapp.whatsappRuntime = createRuntime()
+    globalForWhatsapp.whatsappRuntimeVersion = WHATSAPP_RUNTIME_VERSION
+  }
+  return globalForWhatsapp.whatsappRuntime!
+}
+
+function ensureWhatsappPipelinesRegistered(): void {
+  if (globalForWhatsapp.whatsappPipelinesRegistered) return
+  const runtime = getWhatsappRuntime()
+  const messagePipeline = new WhatsappMessagePipeline(
+    runtime.eventBus,
+    runtime.ensureChatDiscoveredUseCase,
+    runtime.storeUseCase,
+    async (chatId, hint) => {
+      if (hint?.trim()) return hint.trim()
+      const result = await runtime.resolveChatNamesUseCase.execute({ chatIds: [chatId] })
+      const match = result.results.find((entry) => entry.chatId === chatId)
+      return match?.name ?? null
+    },
+  )
+  const connectionPipeline = new WhatsappConnectionPipeline(runtime.eventBus)
+
+  const agentOutboundTracker = new AgentOutboundTracker()
+  const agentReplyDeduplicator = new AgentReplyDeduplicator(
+    agentOutboundTracker,
+    runtime.messageRepository,
+  )
+  const recordTokenUsage = new RecordApiTokenUsageUseCase(
+    new ApiTokenUsagePrismaRepository(prisma),
+    config.openai,
+  )
+  const openAIChatProvider = new OpenAIChatProvider({
+    onTokenUsage: async (usage) => {
+      await recordTokenUsage.execute({
+        category: 'agent_message',
+        chatId: usage.chatId,
+        messageId: usage.messageId,
+        model: usage.model,
+        tokensInput: usage.tokensInput,
+        tokensOutput: usage.tokensOutput,
+      })
+    },
+  })
+  const humanTakeoverUseCase = new HandleHumanTakeoverUseCase(runtime.chatConfigRepository)
+  const pauseAfterDeferralUseCase = new PauseAgentAfterDeferralUseCase(runtime.chatConfigRepository)
+  const processAgentAutoReplyUseCase = new ProcessAgentAutoReplyUseCase({
+    chatConfigRepository: runtime.chatConfigRepository,
+    messageRepository: runtime.messageRepository,
+    agentChatProvider: openAIChatProvider,
+    sendMessage: (message) => runtime.provider.sendMessage(message),
+    isWhatsappConnected: () => runtime.provider.getStatus().status === 'connected',
+    hasOpenAIKey: () => Boolean(config.openai.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim()),
+    pauseAfterDeferral: pauseAfterDeferralUseCase,
+    agentOutboundTracker,
+    replyDeduplicator: agentReplyDeduplicator,
+  })
+  const agentAutoReplyPipeline = new AgentAutoReplyPipeline(
+    runtime.eventBus,
+    runtime.messageRepository,
+    humanTakeoverUseCase,
+    processAgentAutoReplyUseCase,
+    agentOutboundTracker,
+  )
+  const mediaProcessingPipeline = new MediaProcessingPipeline(
+    runtime.eventBus,
+    runtime.chatConfigRepository,
+    runtime.messageRepository,
+  )
+
+  messagePipeline.register()
+  connectionPipeline.register(runtime.provider)
+  agentAutoReplyPipeline.register()
+  mediaProcessingPipeline.register()
+  registerDailyReportJob({
+    chatConfigRepository: runtime.chatConfigRepository,
+    messageRepository: runtime.messageRepository,
+  })
+
+  runtime.provider.onMessage(async (message: IncomingMessage) => {
+    const state = getOperationalState()
+    state.lastMessageAt = new Date()
+    recordOperationalEvent('messages.upsert')
+    logRc02EventBusPublish(DomainEvents.WhatsappMessageReceived, {
+      chatId: message.chatId,
+      messageId: message.externalMessageId,
+      messageType: message.messageType,
+    })
+    await runtime.eventBus.publish({
+      name: DomainEvents.WhatsappMessageReceived,
+      payload: message,
+      occurredAt: new Date(),
+    })
+  })
+
+  if (!globalForWhatsapp.whatsappStatusListeners) {
+    globalForWhatsapp.whatsappStatusListeners = new Set()
+  }
+
+  runtime.provider.onStatusChange((status) => {
+    recordOperationalEvent(`connection.${status.status}`)
+    for (const listener of globalForWhatsapp.whatsappStatusListeners ?? []) {
+      listener(status)
+    }
+  })
+
+  globalForWhatsapp.whatsappPipelinesRegistered = true
+}
+
+export async function bootstrapWhatsappRuntime(): Promise<void> {
+  if (!globalForWhatsapp.whatsappBootstrapPromise) {
+    globalForWhatsapp.whatsappBootstrapPromise = (async () => {
+      const operational = getOperationalState()
+      operational.sessionLoaded = isValidAuthSession(config.whatsapp.sessionPath)
+      ensureWhatsappPipelinesRegistered()
+
+      if (!operational.sessionLoaded) {
+        console.info('[whatsapp/bootstrap] no valid session on disk — waiting for manual connect')
+        return
+      }
+
+      console.info('[whatsapp/bootstrap] valid session detected — scheduling auto-connect')
+      setImmediate(() => {
+        void (async () => {
+          const { provider } = getWhatsappRuntime()
+          try {
+            await provider.connect()
+          } catch (error) {
+            console.error('[whatsapp/bootstrap] auto-connect failed', error)
+          }
+        })()
+      })
+    })().catch((error) => {
+      globalForWhatsapp.whatsappBootstrapPromise = undefined
+      throw error
+    })
+  }
+
+  return globalForWhatsapp.whatsappBootstrapPromise
+}
+
+export function subscribeWhatsappStatus(listener: StatusListener): () => void {
+  if (!globalForWhatsapp.whatsappStatusListeners) {
+    globalForWhatsapp.whatsappStatusListeners = new Set()
+  }
+  globalForWhatsapp.whatsappStatusListeners.add(listener)
+  listener(getWhatsappRuntime().provider.getStatus())
+  return () => globalForWhatsapp.whatsappStatusListeners?.delete(listener)
+}
+
+export async function getWhatsappMessageMetrics() {
+  const { metricsUseCase } = getWhatsappRuntime()
+  const capture = getMessageCaptureMetrics()
+  const dbMetrics = await metricsUseCase.execute()
+  const totalReceived = Math.max(capture.totalReceived, dbMetrics.totalPersisted)
+  const totalPersisted = dbMetrics.totalPersisted
+  const lossRate = totalReceived === 0 ? 0 : Math.max(0, totalReceived - totalPersisted) / totalReceived
+
+  return {
+    totalReceived,
+    totalPersisted,
+    lossRate,
+    types: dbMetrics.persistedByType,
+    emptyTextCount: dbMetrics.emptyTextCount,
+    captureFailed: capture.totalFailed,
+  }
+}
+
+export async function getWhatsappFidelityMetrics() {
+  const { fidelityUseCase } = getWhatsappRuntime()
+  return fidelityUseCase.execute()
+}
+
+export function getWhatsappArchiveHealth() {
+  return buildArchiveHealthSnapshot(getMessageCaptureMetrics())
+}
+
+export function getChatIdentityResolver(): ChatIdentityResolver {
+  const ownJid = getOwnJidFromAuthSession(config.whatsapp.sessionPath)
+  const { contactNameResolver } = getWhatsappRuntime()
+  const ownDisplayName = ownJid ? contactNameResolver.getBestName(ownJid) : null
+  return new ChatIdentityResolver(ownJid, ownDisplayName)
+}
+
+export async function waitForProviderStatus(
+  predicate: (status: WhatsappStatus) => boolean,
+  timeoutMs = 15_000,
+  intervalMs = 250,
+): Promise<WhatsappStatus> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const status = getWhatsappRuntime().provider.getStatus()
+    if (predicate(status)) return status
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  return getWhatsappRuntime().provider.getStatus()
+}
+
+export async function ensureWhatsappReady(): Promise<void> {
+  const { ensureServerReady } = await import('@/lib/server-ready')
+  await ensureServerReady()
+  await bootstrapWhatsappRuntime()
+}
+
+export async function getWhatsappOperationalStatus(): Promise<WhatsappOperationalStatus> {
+  await bootstrapWhatsappRuntime()
+  const { provider, messageRepository } = getWhatsappRuntime()
+  const status = provider.getStatus()
+  const operational = getOperationalState()
+  const [messageCount, chatCount, groupCount, lastMessage] = await Promise.all([
+    messageRepository.count(),
+    prisma.whatsappChatConfig.count(),
+    prisma.whatsappChatConfig.count({ where: { chatId: { endsWith: '@g.us' } } }),
+    prisma.whatsappMessage.findFirst({
+      orderBy: { receivedAt: 'desc' },
+      select: { receivedAt: true },
+    }),
+  ])
+
+  return {
+    status: status.status,
+    connected: status.status === 'connected',
+    authenticated: status.authenticated,
+    sessionLoaded: operational.sessionLoaded,
+    qrCode: status.qrCode,
+    qrCodeDataUrl: status.qrCodeDataUrl,
+    lastConnectedAt: status.lastConnectedAt?.toISOString() ?? null,
+    messageCount,
+    liveMessageCount: status.messageCount,
+    chatCount,
+    groupCount,
+    lastMessageAt:
+      operational.lastMessageAt?.toISOString() ?? lastMessage?.receivedAt.toISOString() ?? null,
+    lastEventAt: operational.lastEventAt?.toISOString() ?? null,
+    lastEventName: operational.lastEventName,
+    operationalMessage: status.operationalMessage ?? null,
+  }
+}
