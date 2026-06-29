@@ -6,15 +6,17 @@ import { createIsolatedTestDatabase } from './helpers/test-database'
 describe('startup validation', () => {
   it('accepts migrated isolated sqlite database', async () => {
     const testDb = createIsolatedTestDatabase()
-    const configWithDb = createConfig({
-      NODE_ENV: 'test',
-      DATABASE_URL: testDb.databaseUrl,
-      OPENAI_API_KEY: 'test-openai-key',
-      MEDIA_STORAGE_PATH: './storage/media-test',
-      TEMP_STORAGE_PATH: './storage/temp-test',
-      WHATSAPP_SESSION_PATH: './storage/whatsapp-test',
-      BACKUP_PATH: './backups-test',
-    })
+    const configWithDb = createConfig(
+      {
+        NODE_ENV: 'test',
+        DATABASE_URL: testDb.databaseUrl,
+        MEDIA_STORAGE_PATH: './storage/media-test',
+        TEMP_STORAGE_PATH: './storage/temp-test',
+        WHATSAPP_SESSION_PATH: './storage/whatsapp-test',
+        BACKUP_PATH: './backups-test',
+      },
+      { overridesOnly: true },
+    )
 
     const result = await validateRuntimeStartup(configWithDb, testDb.prisma)
     expect(result.missingTables).toEqual([])

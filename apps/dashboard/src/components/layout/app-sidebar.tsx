@@ -7,10 +7,12 @@ import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { href: '/dashboard/permissions', label: 'Permissões', accent: 'green' as const },
+  { href: '/dashboard/assistant', label: 'Chat IA', accent: 'pink' as const },
   { href: '/dashboard', label: 'Dashboard', accent: 'orange' as const },
   { href: '/dashboard/messages', label: 'Mensagens', accent: 'pink' as const },
   { href: '/dashboard/whatsapp', label: 'WhatsApp', accent: 'green' as const },
   { href: '/dashboard/reports', label: 'Relatórios', accent: 'orange' as const },
+  { href: '/dashboard/settings', label: 'Configurações', accent: 'orange' as const },
 ] as const
 
 const accentStyles = {
@@ -57,7 +59,7 @@ export function AppSidebar() {
         })}
       </nav>
       <div className="border-t border-border/60 px-5 py-4">
-        <p className="text-xs text-muted-foreground">v1.0.9-rc09</p>
+        <p className="text-xs text-muted-foreground">v1.4.0-rc14</p>
       </div>
     </aside>
   )

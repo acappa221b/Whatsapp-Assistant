@@ -1,79 +1,65 @@
+import { describe, expect, it } from 'vitest'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
 import { createConfig, REPO_ROOT } from './index'
 
 describe('config', () => {
-  it('applies defaults', () => {
-    const resolved = createConfig({
-      NODE_ENV: 'test',
-      DATABASE_URL: 'file:./test.db',
-      OPENAI_API_KEY: 'test-openai-key',
-    })
+  it('applies defaults without .env file', () => {
+    const resolved = createConfig(
+      {
+        NODE_ENV: 'test',
+        DATABASE_URL: 'file:./test.db',
+      },
+      { overridesOnly: true },
+    )
 
     expect(resolved.app.port).toBe(4000)
-    expect(resolved.openai.model).toBe('gpt-5-mini')
+    expect(resolved.openai.apiKey).toBe('')
     expect(resolved.whatsapp.autoReconnect).toBe(true)
   })
 
-  it('requires OPENAI_API_KEY in production', () => {
-    expect(() =>
-      createConfig({
+  it('does not require OPENAI_API_KEY in production', () => {
+    const resolved = createConfig(
+      {
         NODE_ENV: 'production',
         DATABASE_URL: 'file:./dev.db',
-        OPENAI_API_KEY: '',
-      }).openai.apiKey,
-    ).toThrow(/OPENAI_API_KEY is required/)
+      },
+      { overridesOnly: true },
+    )
+    expect(resolved.openai.apiKey).toBe('')
   })
 
   it('validates zod numeric and boolean fields', () => {
-    const resolved = createConfig({
-      NODE_ENV: 'test',
-      DATABASE_URL: 'file:./test.db',
-      OPENAI_API_KEY: 'test-openai-key',
-      PORT: '4100',
-      LOG_PRETTY_PRINT: 'false',
-      AUDIT_RETENTION_DAYS: '30',
-    })
+    const resolved = createConfig(
+      {
+        NODE_ENV: 'test',
+        DATABASE_URL: 'file:./test.db',
+        PORT: '4100',
+        LOG_PRETTY_PRINT: 'false',
+        AUDIT_RETENTION_DAYS: '30',
+      },
+      { overridesOnly: true },
+    )
 
     expect(resolved.app.port).toBe(4100)
     expect(resolved.logging.prettyPrint).toBe(false)
     expect(resolved.app.auditRetentionDays).toBe(30)
   })
 
-  it('merges root env file when DATABASE_URL is preset in process env', () => {
-    if (!existsSync(resolve(REPO_ROOT, '.env'))) {
-      return
-    }
-
-    const withFile = createConfig(
-      {
-        NODE_ENV: 'test',
-        DATABASE_URL: 'file:./packages/database/prisma/dev.db',
-      },
-      { skipEnvFile: false },
-    )
-    const withoutFile = createConfig(
-      {
-        NODE_ENV: 'test',
-        DATABASE_URL: 'file:./packages/database/prisma/dev.db',
-        OPENAI_API_KEY: '',
-      },
-      { skipEnvFile: true },
-    )
-
-    expect(withFile.openai.apiKey.length).toBeGreaterThan(0)
-    expect(withoutFile.openai.apiKey).toBe('')
+  it('starts without .env.example', () => {
+    expect(existsSync(resolve(REPO_ROOT, '.env.example'))).toBe(false)
   })
 
   it('throws explicit error for invalid values', () => {
     expect(() =>
-      createConfig({
-        NODE_ENV: 'test',
-        DATABASE_URL: 'file:./test.db',
-        OPENAI_API_KEY: 'test-openai-key',
-        PORT: 'abc',
-      }),
+      createConfig(
+        {
+          NODE_ENV: 'test',
+          DATABASE_URL: 'file:./test.db',
+          PORT: 'abc',
+        },
+        { overridesOnly: true },
+      ),
     ).toThrow(/Invalid numeric value: abc/)
   })
 })

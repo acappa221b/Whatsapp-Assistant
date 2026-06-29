@@ -251,4 +251,14 @@ export class InMemoryWhatsappMessageRepository implements WhatsappMessageReposit
       this.store.set(id, message.markSourceAgent())
     }
   }
+
+  async updateContent(id: string, content: string): Promise<WhatsappMessage> {
+    const message = this.store.get(id)
+    if (!message) {
+      throw new Error(`WhatsappMessage not found: ${id}`)
+    }
+    const updated = message.withProcessedContent(content)
+    this.store.set(id, updated)
+    return updated
+  }
 }

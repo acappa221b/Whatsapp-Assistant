@@ -38,7 +38,7 @@ type MediaMessageForDownload = {
 
 type DownloadContentFromMessage = (
   message: MediaMessageForDownload,
-  mediaType: 'image' | 'document',
+  mediaType: 'image' | 'document' | 'audio',
 ) => Promise<AsyncIterable<Uint8Array>>
 
 const SUPPORTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const
@@ -123,6 +123,16 @@ export class MediaDownloader {
     return this.saveMedia(buffer, mimeType, input.fileName, input.externalMessageId, {
       ...input,
       messageType: input.messageType ?? 'DOCUMENT',
+    })
+  }
+
+  async downloadAudio(input: DownloadMediaInput): Promise<StoredMedia> {
+    const buffer = await this.downloadMediaBuffer(input.externalMessageId, 'audio')
+    const fileName = input.fileName?.trim() || `${sanitizePathSegment(input.externalMessageId)}.ogg`
+    const mimeType = input.mimeType?.trim() || 'audio/ogg'
+    return this.saveRawMedia(buffer, mimeType, fileName, input.externalMessageId, {
+      ...input,
+      messageType: input.messageType ?? 'AUDIO',
     })
   }
 
@@ -261,7 +271,7 @@ export class MediaDownloader {
 
   private async downloadMediaBuffer(
     externalMessageId: string,
-    mediaType: 'image' | 'document',
+    mediaType: 'image' | 'document' | 'audio',
   ): Promise<Buffer> {
     const rawMessage = this.registry.get(externalMessageId)
     if (!rawMessage?.message) {
@@ -269,7 +279,11 @@ export class MediaDownloader {
     }
 
     const mediaMessage =
-      mediaType === 'image' ? rawMessage.message.imageMessage : rawMessage.message.documentMessage
+      mediaType === 'image'
+        ? rawMessage.message.imageMessage
+        : mediaType === 'document'
+          ? rawMessage.message.documentMessage
+          : rawMessage.message.audioMessage ?? rawMessage.message.pttMessage
     if (!mediaMessage) {
       throw new ValidationError(`Message ${externalMessageId} does not contain ${mediaType} media`)
     }
@@ -277,8 +291,65 @@ export class MediaDownloader {
     const { downloadContentFromMessage } = (await import('@whiskeysockets/baileys')) as {
       downloadContentFromMessage: DownloadContentFromMessage
     }
-    const stream = await downloadContentFromMessage(mediaMessage, mediaType)
+    const stream = await downloadContentFromMessage(
+      mediaMessage,
+      mediaType === 'audio' ? 'audio' : mediaType,
+    )
     return readStreamToBuffer(stream)
+  }
+
+  private async saveRawMedia(
+    buffer: Buffer,
+    mimeType: string,
+    fileName: string,
+    externalMessageId: string,
+    context?: {
+      chatId?: string | null
+      displayName?: string | null
+      storageDir?: string | null
+      messageType?: string
+    },
+  ): Promise<StoredMedia> {
+    if (buffer.length === 0) {
+      throw new ValidationError('Media file is empty')
+    }
+    if (buffer.length > this.maxFileSizeBytes) {
+      throw new ValidationError(`Media file exceeds max size of ${this.maxFileSizeBytes} bytes`)
+    }
+
+    const normalizedName = sanitizePathSegment(fileName)
+    const category = resolveMediaCategory(context?.messageType ?? 'AUDIO', mimeType)
+
+    let target: { storagePath: string; absolutePath: string; fileName: string }
+
+    if (context?.chatId) {
+      const displayName = context.displayName?.trim() || 'chat'
+      const resolved = await this.chatMediaStorage.resolvePath(
+        context.chatId,
+        displayName,
+        category,
+        normalizedName,
+        context.storageDir,
+      )
+      target = {
+        storagePath: resolved.storagePath,
+        absolutePath: resolved.absolutePath,
+        fileName: normalizedName,
+      }
+    } else {
+      target = this.generateStoragePath(externalMessageId, 'image/jpeg', fileName, context)
+    }
+
+    await mkdir(this.mediaRootPath, { recursive: true })
+    await writeFile(target.absolutePath, buffer)
+
+    return {
+      mimeType: mimeType as SupportedMediaMimeType,
+      fileName: target.fileName,
+      fileSize: buffer.length,
+      storagePath: target.storagePath,
+      absolutePath: target.absolutePath,
+    }
   }
 }
 

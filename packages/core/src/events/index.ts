@@ -37,6 +37,8 @@ export const DomainEvents = {
   SupplierUpdated: 'SupplierUpdated',
   UserCreated: 'UserCreated',
   UserUpdated: 'UserUpdated',
+  TranscriptionCompleted: 'TranscriptionCompleted',
+  PhotoProcessingCompleted: 'PhotoProcessingCompleted',
 } as const
 
 export type DomainEventName = (typeof DomainEvents)[keyof typeof DomainEvents]

@@ -3,14 +3,14 @@ import { WhatsappHeaderStatus } from '@/components/whatsapp/whatsapp-header-stat
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <AppSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border/60 px-8 py-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center justify-between border-b border-border/60 px-6 py-3">
           <p className="text-sm text-muted-foreground">WhatsApp Assistant</p>
           <WhatsappHeaderStatus />
         </header>
-        <main className="flex-1 px-8 py-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-hidden px-6 py-4">{children}</main>
       </div>
     </div>
   )

@@ -70,9 +70,7 @@ export class OpenAIExtractionProvider implements AIExtractionProvider {
 
   constructor(options: { client?: OpenAIParseClient; model?: string; apiKey?: string } = {}) {
     const apiKey =
-      options.apiKey ??
-      (config.openai.apiKey ||
-        (typeof process.env.OPENAI_API_KEY === 'string' ? process.env.OPENAI_API_KEY : ''))
+      options.apiKey ?? config.openai.apiKey
 
     this.client =
       options.client ??

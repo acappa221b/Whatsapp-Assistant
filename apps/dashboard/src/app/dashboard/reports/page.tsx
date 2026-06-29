@@ -16,13 +16,30 @@ type ReportRow = {
   generatedAt: string
 }
 
+type ChatOption = {
+  chatId: string
+  displayNumber: number
+  name: string | null
+}
+
+function yesterdayIso(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function ReportsPage() {
   const [month, setMonth] = useState<MonthSelection>(currentMonthSelection)
   const [chatId, setChatId] = useState('')
+  const [reportDate, setReportDate] = useState(yesterdayIso())
+  const [chats, setChats] = useState<ChatOption[]>([])
   const [reports, setReports] = useState<ReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ReportRow | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [autoEnabled, setAutoEnabled] = useState(true)
+  const [autoTime, setAutoTime] = useState('23:00')
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
   const loadReports = useCallback(async () => {
     setLoading(true)
@@ -46,6 +63,35 @@ export default function ReportsPage() {
     void loadReports()
   }, [loadReports])
 
+  useEffect(() => {
+    void (async () => {
+      const [chatsRes, scheduleRes] = await Promise.all([
+        fetch('/api/whatsapp/chats'),
+        fetch('/api/settings/reports'),
+      ])
+      if (chatsRes.ok) {
+        const data = (await chatsRes.json()) as { items: ChatOption[] }
+        setChats(
+          (data.items ?? [])
+            .filter((c) => c.chatId)
+            .map((c) => ({
+              chatId: c.chatId,
+              displayNumber: c.displayNumber,
+              name: c.name ?? null,
+            })),
+        )
+      }
+      if (scheduleRes.ok) {
+        const data = (await scheduleRes.json()) as {
+          reportAutoEnabled: boolean
+          reportAutoTime: string
+        }
+        setAutoEnabled(data.reportAutoEnabled)
+        setAutoTime(data.reportAutoTime)
+      }
+    })()
+  }, [])
+
   async function generateManual() {
     if (!chatId.trim()) return
     setGenerating(true)
@@ -53,7 +99,7 @@ export default function ReportsPage() {
       await fetch('/api/reports/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: chatId.trim() }),
+        body: JSON.stringify({ chatId: chatId.trim(), reportDate }),
       })
       await loadReports()
     } finally {
@@ -61,8 +107,22 @@ export default function ReportsPage() {
     }
   }
 
+  async function saveSchedule() {
+    setSavingSchedule(true)
+    try {
+      await fetch('/api/settings/reports', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportAutoEnabled: autoEnabled, reportAutoTime: autoTime }),
+      })
+    } finally {
+      setSavingSchedule(false)
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="h-full min-h-0 overflow-y-auto">
+      <div className="space-y-6 pb-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Relatórios</h1>
@@ -73,12 +133,57 @@ export default function ReportsPage() {
         <MonthPicker value={month} onChange={setMonth} />
       </div>
 
+      <Card className="border-border/60 bg-card/60">
+        <CardHeader>
+          <CardTitle className="text-base">Agendamento automático</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={autoEnabled}
+              onChange={(e) => setAutoEnabled(e.target.checked)}
+            />
+            Gerar automaticamente todo dia
+          </label>
+          <label className="text-sm">
+            Horário (HH:mm)
+            <input
+              type="time"
+              className="ml-2 rounded-md border bg-background px-2 py-1"
+              value={autoTime}
+              onChange={(e) => setAutoTime(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={savingSchedule}
+            onClick={() => void saveSchedule()}
+            className="rounded-md border px-4 py-2 text-sm hover:bg-muted/40"
+          >
+            {savingSchedule ? 'Salvando…' : 'Salvar agendamento'}
+          </button>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-3">
-        <input
+        <select
           className="min-w-[240px] flex-1 rounded-md border bg-background px-3 py-2 text-sm"
-          placeholder="Filtrar por chatId"
           value={chatId}
           onChange={(event) => setChatId(event.target.value)}
+        >
+          <option value="">Selecione o chat</option>
+          {chats.map((chat) => (
+            <option key={chat.chatId} value={chat.chatId}>
+              {formatChatListLabel(chat.displayNumber, chat.name ?? chat.chatId)}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          className="rounded-md border bg-background px-3 py-2 text-sm"
+          value={reportDate}
+          onChange={(e) => setReportDate(e.target.value)}
         />
         <button
           type="button"
@@ -86,7 +191,7 @@ export default function ReportsPage() {
           onClick={() => void generateManual()}
           className="rounded-md border px-4 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
         >
-          {generating ? 'Gerando…' : 'Gerar hoje'}
+          {generating ? 'Gerando…' : 'Gerar agora'}
         </button>
       </div>
 
@@ -137,6 +242,7 @@ export default function ReportsPage() {
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   )

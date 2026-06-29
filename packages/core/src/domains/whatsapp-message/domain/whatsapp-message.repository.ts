@@ -37,4 +37,5 @@ export type WhatsappMessageRepository = {
   ): Promise<WhatsappMessage[]>
   findByChatIdInRange(chatId: string, start: Date, end: Date): Promise<WhatsappMessage[]>
   markSourceAgent(id: string): Promise<void>
+  updateContent(id: string, content: string): Promise<WhatsappMessage>
 }

@@ -8,27 +8,17 @@ dist
 out
 .turbo
 
-# Environment
+# Dados locais do usuário (nunca versionar)
 .env
-.env.local
-.env.*.local
-!.env.example
-
-# ─── Runtime / dados locais (NUNCA commitar) ───
+.env.*
 storage/
 !storage/.gitkeep
 backups/
-
-# WhatsApp session (paths legados + atual)
-.wwebjs_auth
-.baileys_auth
-
-# Database SQLite local
+logs/
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
-packages/database/prisma/dev.db
 packages/database/prisma/*.db
 
 # Build / cache (reforço)

@@ -35,26 +35,27 @@ Qualquer falha interrompe o pipeline.
 
 ```bash
 pnpm install
-cp packages/database/.env.example packages/database/.env
+pnpm db:migrate
 pnpm db:generate
 pnpm lint
 pnpm typecheck
 pnpm test:coverage
 pnpm harness
+pnpm validate:repo-hygiene
 pnpm build
 ```
+
+Não é necessário copiar `.env` — o CI usa `buildDefaultEnv()` e `DATABASE_URL` inline nos testes.
 
 ## Variáveis de ambiente (CI)
 
 | Variável | Valor CI |
 |----------|----------|
-| `DATABASE_URL` | `file:./dev.db` (via `.env.example`) |
+| `NODE_ENV` | `test` |
+| `DATABASE_URL` | `file:./dev.db` (temp isolado nos testes de integração) |
 | `DOCKER_BUILD` | `false` (build local Next.js) |
 
-## Secrets (futuro)
-
-- `OPENAI_API_KEY` — Epic 05+
-- `DATABASE_URL` PostgreSQL — MVP v1.0
+Secrets de IA **não** vão em env no CI — testes de provider usam mocks ou fixtures.
 
 ## E2E
 

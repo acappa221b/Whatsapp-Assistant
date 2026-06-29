@@ -249,3 +249,73 @@ model ConversationDailyReport {
   @@unique([chatId, reportDate])
   @@index([reportDate])
 }
+
+enum AiProviderType {
+  openai
+  gemini
+  deepseek
+  custom
+}
+
+model AppSettings {
+  id                               String   @id @default("default")
+  appName                          String   @default("WhatsApp Assistant")
+  timezone                         String   @default("America/Sao_Paulo")
+  port                             Int      @default(4000)
+  companyName                      String   @default("")
+  databasePath                     String   @default("packages/database/prisma/dev.db")
+  whatsappSessionPath              String   @default("storage/whatsapp")
+  mediaStoragePath                 String   @default("storage/media")
+  whatsappAutoReconnect            Boolean  @default(true)
+  whatsappReconnectDelayMs         Int      @default(5000)
+  whatsappIgnoreHistory            Boolean  @default(true)
+  settingsEncryptionSecret         String?
+  encryptionSecretGenerated        Boolean  @default(false)
+  setupCompleted                   Boolean  @default(false)
+  reportAutoEnabled                Boolean  @default(true)
+  reportAutoTime                   String   @default("23:00")
+  reportTimezone                   String   @default("America/Sao_Paulo")
+  lastAutoReportRunDate            String?
+  defaultAiProvider                String   @default("openai")
+  defaultChatProviderId            String?
+  defaultTranscriptionProviderId   String?
+  defaultVisionProviderId          String?
+  defaultReportProviderId          String?
+  defaultAssistantProviderId       String?
+  updatedAt                        DateTime @updatedAt
+}
+
+model AiProviderConfig {
+  id          String         @id @default(cuid())
+  provider    AiProviderType
+  displayName String
+  apiKeyEnc   String
+  model       String?
+  baseUrl     String?
+  isDefault   Boolean        @default(false)
+  enabled     Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([provider, displayName])
+}
+
+model AssistantConversation {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model AssistantActionLog {
+  id        String   @id @default(cuid())
+  action    String
+  chatIds   Json
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

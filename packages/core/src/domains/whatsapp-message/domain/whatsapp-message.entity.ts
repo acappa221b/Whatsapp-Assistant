@@ -153,6 +153,13 @@ export class WhatsappMessage {
     })
   }
 
+  withProcessedContent(content: string): WhatsappMessage {
+    return new WhatsappMessage({
+      ...this,
+      content: WhatsappMessage.validateContent(content.trim(), this.messageType),
+    })
+  }
+
   enrichFrom(input: {
     content?: string
     messageType?: MessageType

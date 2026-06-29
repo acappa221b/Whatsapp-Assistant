@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.2.0-rc11  
-**Fase:** RC-11 Dashboard, tokens, relatórios, permissões v2  
+**Versão:** 1.4.0-rc14  
+**Fase:** RC-14 Mensagens WhatsApp + OSS zero-config + Launcher  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -40,10 +40,12 @@ Assistente de memória conversacional via WhatsApp — captura, organização, i
 | Rota | Nome |
 |------|------|
 | `/dashboard/permissions` | **Permissões** (governança por chat) |
+| `/dashboard/assistant` | **Chat IA** (relatórios + ações) |
 | `/dashboard` | Sumário |
 | `/dashboard/messages` | Mensagens (somente chats com `archiveEnabled`) |
 | `/dashboard/whatsapp` | WhatsApp |
-| `/dashboard/reports` | Relatórios (placeholder Fase 1) |
+| `/dashboard/reports` | Relatórios diários |
+| `/dashboard/settings` | **Configurações** (provedores IA, agendamento) |
 
 Redirect: `/` → `/dashboard` · `/dashboard/chats` → `/dashboard/permissions`
 
@@ -60,19 +62,21 @@ Estes paths existem apenas na máquina de desenvolvimento — **nunca** entram n
 | `storage/temp/` | Arquivos temporários |
 | `packages/database/prisma/dev.db` | Banco SQLite com mensagens |
 | `backups/` | Backups locais |
-| `.env` | Secrets (API keys, tokens) |
+| `logs/` | Logs do launcher |
 
-Após clone: copiar `.env.example` → `.env` e rodar `pnpm db:migrate`.
+Após clone: execute o launcher (abaixo) — migrations rodam automaticamente.
 
 Validação: `pnpm validate:repo-hygiene` (também roda no CI).
 
 ### Governança por chat (RC-08B)
 
-| Switch | Campo | Efeito |
-|--------|-------|--------|
+| Switch | Campo | Efeito (RC-12) |
+|--------|-------|----------------|
 | **Habilitado** | `archiveEnabled` | Chat visível em Mensagens |
-| **IA** | `aiProcessingEnabled` | Pipeline de processamento/análise (requer Habilitado) |
-| **Resposta IA** | `agentChatEnabled` | Respostas automáticas no WhatsApp via OpenAI (requer Habilitado + IA) |
+| **Resposta IA** | `agentChatEnabled` | Agent TEXT + áudio/imagem pós-processamento |
+| **Áudio** | `audioProcessingEnabled` | Transcrição Whisper → `[ÁUDIO]` no content |
+| **Foto** | `photoProcessingEnabled` | Vision + agent com contexto `[FOTO]` |
+| **Relatório** | `reportGenerationEnabled` | Geração manual/auto de relatórios |
 | **#N** | `displayNumber` | ID estável do chat em Permissões e Mensagens |
 | **Lixeira** | — | Apaga mensagens + mídia; desabilita flags; chat permanece em Permissões |
 
@@ -147,22 +151,46 @@ Detalhes: [docs/refactor/deprecated-modules.md](docs/refactor/deprecated-modules
 
 ---
 
-## Quick start (código atual — pré-Assistant)
+## Começar em 2 minutos (Windows / Mac / Linux)
+
+1. Instale [Node.js 20+](https://nodejs.org)
+2. Clone o repositório
+3. Execute o launcher na pasta do projeto:
+   - **Windows:** duplo-clique em `Start WhatsApp Assistant.bat`
+   - **macOS:** duplo-clique em `Start WhatsApp Assistant.command`
+   - **Terminal:** `pnpm launch` ou `node scripts/launch.mjs`
+4. O navegador abrirá em [http://localhost:4000](http://localhost:4000)
+5. Em **Configurações**, adicione sua chave de IA
+6. Em **WhatsApp**, escaneie o QR Code
+7. Em **Permissões**, habilite os chats desejados
+
+### O que fica só no seu computador
+
+- `storage/` — sessão WhatsApp e mídias
+- `packages/database/prisma/dev.db` — mensagens e relatórios
+- `backups/`
+
+Nada disso vai para o GitHub.
+
+---
+
+## Desenvolvimento (contribuidores)
 
 ```bash
 pnpm install
-cp .env.example .env
-pnpm db:generate
+pnpm db:migrate && pnpm db:generate
 pnpm dev
 ```
 
 Abrir [http://localhost:4000/dashboard/whatsapp](http://localhost:4000/dashboard/whatsapp) para conectar.
 
+Ver [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ---
 
 ## Próximo passo
 
-**Assistant-01C** — Whisper / transcrição de áudios. **RC-10** entregou `#N` por chat e resposta automática IA (OpenAI).
+**RC-14** entregou UI Mensagens estilo WhatsApp, zero `.env`, launcher e wizard de configuração.
 
 ---
 
@@ -178,7 +206,8 @@ Abrir [http://localhost:4000/dashboard/whatsapp](http://localhost:4000/dashboard
 
 | Versão | Descrição |
 |--------|-----------|
-| 1.2.0-rc11 | RC-11: dashboard real, token ledger, relatórios diários, permissões v2, fix saudações, header status |
+| 1.4.0-rc14 | RC-14: mensagens estilo WhatsApp, zero `.env`, launcher, config no dashboard |
+| 1.3.1-rc13 | RC-13: permissões ordenáveis, Chat IA operacional (preview/send) |
 | 1.1.1-rc10b | RC-10B: skip ack/status, anti-repetição, anti-convite na resposta IA |
 | 1.1.0-rc10 | RC-10: `#N` por chat, Resposta IA (OpenAI), `sendMessage` Baileys, takeover/deferral |
 | 1.0.9-rc09 | RC-09: nomes confiáveis, mídia por chat, delete recursivo, reset geral |

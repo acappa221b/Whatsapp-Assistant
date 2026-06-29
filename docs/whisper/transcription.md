@@ -2,7 +2,7 @@
 
 **Produto:** WhatsApp Assistant  
 **Epic:** Assistant-01  
-**Status:** Spec (implementação pendente)
+**Status:** IMPLEMENTED (RC-12 — `TranscribeAudioUseCase`)
 
 ---
 

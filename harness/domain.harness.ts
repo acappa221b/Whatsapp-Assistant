@@ -77,15 +77,18 @@ export const SecurityHarness: Harness = {
     const errors: string[] = []
     const gitignorePath = join(ROOT, '.gitignore')
 
-    if (!existsSync(join(ROOT, '.env.example'))) {
-      errors.push('Missing .env.example')
+    if (existsSync(join(ROOT, '.env.example'))) {
+      errors.push('.env.example must not exist')
     }
     if (!existsSync(gitignorePath)) {
       errors.push('Missing .gitignore')
     } else {
       const gitignore = readFileSync(gitignorePath, 'utf-8')
-      if (!gitignore.includes('.env')) {
-        errors.push('.gitignore must ignore .env files')
+      if (!gitignore.includes('storage/')) {
+        errors.push('.gitignore must ignore storage/')
+      }
+      if (!gitignore.includes('*.db')) {
+        errors.push('.gitignore must ignore *.db')
       }
     }
     return createResult(this.name, errors)

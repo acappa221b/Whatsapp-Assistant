@@ -2,6 +2,9 @@ import {
   DEFAULT_AGENT_DEFER_PHRASE,
   formatAgentOutbound,
   isLegacyAgentOutboundMessage,
+  isProcessedPhotoContent,
+  isTranscribedAudioContent,
+  PHOTO_PENDING_AGENT_REPLY,
   sanitizeAgentReply,
 } from '@finance-ai/shared/utils'
 import type { WhatsappChatConfigRepository } from '../../whatsapp-chat-config/domain/whatsapp-chat-config.repository'
@@ -51,6 +54,7 @@ export type ProcessAgentAutoReplyDeps = {
   sendMessage: (message: AgentOutgoingMessage) => Promise<void>
   isWhatsappConnected: () => boolean
   hasOpenAIKey: () => boolean
+  hasAiProvider?: () => boolean | Promise<boolean>
   pauseAfterDeferral: PauseAgentAfterDeferralUseCase
   agentOutboundTracker: AgentOutboundTracker
   replyDeduplicator: AgentReplyDeduplicator
@@ -68,20 +72,40 @@ export class ProcessAgentAutoReplyUseCase {
     ) {
       return
     }
-    if (message.messageType !== 'TEXT') return
-
-    const config = await this.deps.chatConfigRepository.findByChatId(message.chatId)
-    if (!config) return
-    if (
-      !config.archiveEnabled ||
-      !config.agentChatEnabled ||
-      config.agentPaused
-    ) {
+    if (message.messageType !== 'TEXT' && message.messageType !== 'AUDIO' && message.messageType !== 'IMAGE') {
       return
     }
 
-    if (!this.deps.hasOpenAIKey()) {
-      console.warn('[AgentChat] OPENAI_API_KEY ausente — auto-reply ignorado', {
+    const config = await this.deps.chatConfigRepository.findByChatId(message.chatId)
+    if (!config) return
+    if (!config.archiveEnabled || !config.agentChatEnabled || config.agentPaused) {
+      return
+    }
+
+    let incomingText: string | null = null
+
+    if (message.messageType === 'TEXT') {
+      incomingText = message.content.trim()
+    } else if (message.messageType === 'AUDIO') {
+      if (!config.audioProcessingEnabled) return
+      if (!isTranscribedAudioContent(message.content)) return
+      incomingText = message.content.trim()
+    } else if (message.messageType === 'IMAGE') {
+      if (!config.photoProcessingEnabled) {
+        await this.sendFixedReply(message, config.displayNumber, PHOTO_PENDING_AGENT_REPLY)
+        return
+      }
+      if (!isProcessedPhotoContent(message.content)) return
+      incomingText = message.content.trim()
+    }
+
+    if (!incomingText) return
+
+    const hasProvider = this.deps.hasAiProvider
+      ? await this.deps.hasAiProvider()
+      : this.deps.hasOpenAIKey()
+    if (!hasProvider) {
+      console.warn('[AgentChat] AI provider ausente — auto-reply ignorado', {
         chatId: message.chatId,
         displayNumber: config.displayNumber,
       })
@@ -96,6 +120,17 @@ export class ProcessAgentAutoReplyUseCase {
       return
     }
 
+    await this.processIncomingText(message, config.displayNumber, incomingText)
+  }
+
+  private async processIncomingText(
+    message: WhatsappMessage,
+    displayNumber: number,
+    incomingText: string,
+  ): Promise<void> {
+    const config = await this.deps.chatConfigRepository.findByChatId(message.chatId)
+    if (!config) return
+
     const recentMessages = await this.deps.messageRepository.findRecentByChatId(message.chatId, {
       limit: 10,
     })
@@ -108,19 +143,18 @@ export class ProcessAgentAutoReplyUseCase {
       }))
       .filter((entry) => entry.content)
 
-    const incomingText = message.content.trim()
     const skipDecision = shouldSkipBeforeLLM(incomingText, recentContext)
     if (skipDecision.skip) {
       console.info('[AgentChat] skip', {
         chatId: message.chatId,
-        displayNumber: config.displayNumber,
+        displayNumber,
         reason: skipDecision.reason,
       })
       return
     }
 
     if (shouldDeferInviteBeforeLLM(incomingText)) {
-      await this.sendDeferral(message, config.displayNumber, DEFAULT_AGENT_DEFER_PHRASE)
+      await this.sendDeferral(message, displayNumber, DEFAULT_AGENT_DEFER_PHRASE)
       return
     }
 
@@ -128,6 +162,7 @@ export class ProcessAgentAutoReplyUseCase {
       limit: 50,
       fromMe: true,
     })
+    const tracker = this.deps.agentOutboundTracker
     const ownerStyleSamples = ownerMessages
       .map((entry) => entry.content.trim())
       .filter(
@@ -150,7 +185,7 @@ export class ProcessAgentAutoReplyUseCase {
     if (result.action === 'skip' || result.skipReason) {
       console.info('[AgentChat] skip', {
         chatId: message.chatId,
-        displayNumber: config.displayNumber,
+        displayNumber,
         reason: result.skipReason ?? 'llm-skip',
       })
       return
@@ -158,13 +193,13 @@ export class ProcessAgentAutoReplyUseCase {
 
     if (result.shouldDefer || result.action === 'defer') {
       const phrase = result.deferralPhrase?.trim() || DEFAULT_AGENT_DEFER_PHRASE
-      await this.sendDeferral(message, config.displayNumber, phrase)
+      await this.sendDeferral(message, displayNumber, phrase)
       return
     }
 
     const sanitized = sanitizeAgentReply(result.replyText.trim())
     if (!sanitized.ok) {
-      await this.sendDeferral(message, config.displayNumber, sanitized.phrase)
+      await this.sendDeferral(message, displayNumber, sanitized.phrase)
       return
     }
 
@@ -172,7 +207,7 @@ export class ProcessAgentAutoReplyUseCase {
     if (await this.deps.replyDeduplicator.isDuplicateReply(message.chatId, outbound)) {
       console.info('[AgentChat] skip', {
         chatId: message.chatId,
-        displayNumber: config.displayNumber,
+        displayNumber,
         reason: 'duplicate-reply',
       })
       return
@@ -186,8 +221,30 @@ export class ProcessAgentAutoReplyUseCase {
     })
     console.info('[AgentChat] reply', {
       chatId: message.chatId,
-      displayNumber: config.displayNumber,
+      displayNumber,
       action: 'sent',
+    })
+  }
+
+  private async sendFixedReply(
+    message: WhatsappMessage,
+    displayNumber: number,
+    phrase: string,
+  ): Promise<void> {
+    const tracker = this.deps.agentOutboundTracker
+    const outbound = formatAgentOutbound(phrase)
+    if (await this.deps.replyDeduplicator.isDuplicateReply(message.chatId, outbound)) {
+      return
+    }
+    tracker.register(message.chatId, outbound)
+    await this.deps.sendMessage({
+      to: message.chatId,
+      content: outbound,
+      metadata: { source: 'agent-auto-reply', messageId: message.id },
+    })
+    console.info('[AgentChat] photo-pending-reply', {
+      chatId: message.chatId,
+      displayNumber,
     })
   }
 

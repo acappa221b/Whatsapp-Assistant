@@ -36,12 +36,12 @@ export const Assistant01AHarness: Harness = {
     }
 
     const sidebar = read('apps/dashboard/src/components/layout/app-sidebar.tsx')
-    for (const label of ['Dashboard', 'Mensagens', 'WhatsApp', 'Relatórios']) {
+    for (const label of ['Dashboard', 'Mensagens', 'WhatsApp', 'Relatórios', 'Chat IA', 'Configurações']) {
       if (!sidebar.includes(label)) {
         errors.push(`sidebar missing nav item: ${label}`)
       }
     }
-    for (const hidden of ['Pipeline', 'Extrações', 'Despesas', 'Aprovações', 'Configurações']) {
+    for (const hidden of ['Pipeline', 'Extrações', 'Despesas', 'Aprovações']) {
       if (sidebar.includes(hidden)) {
         errors.push(`sidebar must not expose deprecated nav: ${hidden}`)
       }

@@ -60,8 +60,12 @@ export function MonthPicker({ value, onChange }: MonthPickerProps) {
         className="rounded-md border bg-background px-3 py-2 text-sm"
         value={`${value.year}-${value.month}`}
         onChange={(event) => {
-          const [year, month] = event.target.value.split('-').map(Number)
-          onChange({ year, month })
+          const [yearStr, monthStr] = event.target.value.split('-')
+          const year = Number(yearStr)
+          const month = Number(monthStr)
+          if (Number.isFinite(year) && Number.isFinite(month)) {
+            onChange({ year, month })
+          }
         }}
       >
         {buildMonthOptions().map((option) => (

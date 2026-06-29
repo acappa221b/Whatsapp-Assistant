@@ -19,15 +19,19 @@ export function createIsolatedTestDatabase(): TestDatabase {
   const dbPath = join(dir, 'test.db')
   const databaseUrl = `file:${dbPath.replace(/\\/g, '/')}`
 
-  execSync('npx prisma db push --skip-generate --accept-data-loss', {
-    cwd: PACKAGE_ROOT,
-    env: createProcessEnv(
-      createConfig({
+  const env = createProcessEnv(
+    createConfig(
+      {
         NODE_ENV: 'test',
         DATABASE_URL: databaseUrl,
-        OPENAI_API_KEY: 'test-openai-key',
-      }),
+      },
+      { overridesOnly: true },
     ),
+  )
+
+  execSync('npx prisma db push --skip-generate --accept-data-loss', {
+    cwd: PACKAGE_ROOT,
+    env,
     stdio: 'pipe',
   })
 
@@ -45,18 +49,41 @@ export function createIsolatedTestDatabase(): TestDatabase {
   }
 }
 
+const RESET_ORDER = [
+  'AssistantActionLog',
+  'AssistantConversation',
+  'AiProviderConfig',
+  'ApiTokenUsage',
+  'ConversationDailyReport',
+  'Attachment',
+  'Extraction',
+  'ApprovalQueue',
+  'Expense',
+  'Revenue',
+  'WhatsappMessage',
+  'WhatsappChatConfig',
+  'Category',
+  'Supplier',
+  'User',
+  'AuditLog',
+  'AppSettings',
+] as const
+
 /** Clears all tables between tests without re-running prisma db push. */
 export async function resetTestDatabase(prisma: PrismaClient): Promise<void> {
-  await prisma.$transaction([
-    prisma.attachment.deleteMany(),
-    prisma.extraction.deleteMany(),
-    prisma.expense.deleteMany(),
-    prisma.approvalQueue.deleteMany(),
-    prisma.revenue.deleteMany(),
-    prisma.category.deleteMany(),
-    prisma.supplier.deleteMany(),
-    prisma.user.deleteMany(),
-    prisma.whatsappMessage.deleteMany(),
-    prisma.auditLog.deleteMany(),
-  ])
+  const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
+  )
+  const existing = new Set(rows.map((row) => row.name))
+
+  await prisma.$executeRawUnsafe('PRAGMA foreign_keys = OFF')
+  try {
+    for (const table of RESET_ORDER) {
+      if (existing.has(table)) {
+        await prisma.$executeRawUnsafe(`DELETE FROM "${table}"`)
+      }
+    }
+  } finally {
+    await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON')
+  }
 }

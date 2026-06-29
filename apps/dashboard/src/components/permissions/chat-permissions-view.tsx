@@ -1,10 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { RefreshCw, Trash2, ChevronUp, ChevronDown, Minus } from 'lucide-react'
 import {
+  cycleSortState,
+  filterChatsBySearch,
   formatChatListLabel,
   getChatTypeLabel,
+  sortChats,
+  type SortColumn,
+  type SortState,
 } from '@finance-ai/shared/utils'
 import { ToggleSwitch } from '@/components/ui/toggle-switch'
 
@@ -24,6 +29,41 @@ export type ChatPermissionRow = {
   updatedAt: string
 }
 
+function ariaSortValue(direction: SortState['direction']): 'ascending' | 'descending' | 'none' {
+  if (direction === 'asc') return 'ascending'
+  if (direction === 'desc') return 'descending'
+  return 'none'
+}
+
+function SortableHeader({
+  label,
+  column,
+  sort,
+  isBoolean,
+  onSort,
+}: {
+  label: string
+  column: SortColumn
+  sort: SortState
+  isBoolean: boolean
+  onSort: (column: SortColumn, isBoolean: boolean) => void
+}) {
+  const active = sort.column === column
+  const Icon = !active || !sort.direction ? Minus : sort.direction === 'asc' ? ChevronUp : ChevronDown
+  return (
+    <th
+      className="cursor-pointer px-4 py-3 hover:bg-muted/60"
+      aria-sort={active ? ariaSortValue(sort.direction) : 'none'}
+      onClick={() => onSort(column, isBoolean)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Icon className={`h-3.5 w-3.5 ${active ? 'text-foreground' : 'text-muted-foreground'}`} />
+      </span>
+    </th>
+  )
+}
+
 export function ChatPermissionsView() {
   const [chats, setChats] = useState<ChatPermissionRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,6 +72,8 @@ export function ChatPermissionsView() {
   const [updatingChatId, setUpdatingChatId] = useState<string | null>(null)
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
   const [resolvingNames, setResolvingNames] = useState(false)
+  const [sort, setSort] = useState<SortState>({ column: null, direction: null })
+  const [search, setSearch] = useState('')
 
   const loadChats = useCallback(async () => {
     setError(null)
@@ -91,6 +133,15 @@ export function ChatPermissionsView() {
     }
     return undefined
   }, [chats, resolveNames, resolvingNames])
+
+  const visibleChats = useMemo(
+    () => sortChats(filterChatsBySearch(chats, search), sort),
+    [chats, search, sort],
+  )
+
+  function handleSort(column: SortColumn, isBoolean: boolean) {
+    setSort((current) => cycleSortState(current, column, isBoolean))
+  }
 
   async function patchChat(
     chatId: string,
@@ -188,6 +239,13 @@ export function ChatPermissionsView() {
         </button>
       </div>
 
+      <input
+        className="w-full max-w-md rounded-md border bg-background px-3 py-2 text-sm"
+        placeholder="Buscar por #N ou nome…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
       {feedback ? (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
           {feedback}
@@ -207,17 +265,17 @@ export function ChatPermissionsView() {
           <table className="min-w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>
-                <th className="px-4 py-3">Chat/Grupo</th>
-                <th className="px-4 py-3">Habilitado</th>
-                <th className="px-4 py-3">Resposta IA</th>
-                <th className="px-4 py-3">Áudio</th>
-                <th className="px-4 py-3">Foto</th>
-                <th className="px-4 py-3">Relatório</th>
+                <SortableHeader label="Chat/Grupo" column="name" sort={sort} isBoolean={false} onSort={handleSort} />
+                <SortableHeader label="Habilitado" column="archiveEnabled" sort={sort} isBoolean onSort={handleSort} />
+                <SortableHeader label="Resposta IA" column="agentChatEnabled" sort={sort} isBoolean onSort={handleSort} />
+                <SortableHeader label="Áudio" column="audioProcessingEnabled" sort={sort} isBoolean onSort={handleSort} />
+                <SortableHeader label="Foto" column="photoProcessingEnabled" sort={sort} isBoolean onSort={handleSort} />
+                <SortableHeader label="Relatório" column="reportGenerationEnabled" sort={sort} isBoolean onSort={handleSort} />
                 <th className="px-4 py-3">Histórico</th>
               </tr>
             </thead>
             <tbody>
-              {chats.map((chat) => {
+              {visibleChats.map((chat) => {
                 const label = formatChatListLabel(chat.displayNumber, chat.name)
                 const typeLabel = getChatTypeLabel(chat.chatId)
                 const busy = updatingChatId === chat.chatId || deletingChatId === chat.chatId
@@ -296,10 +354,10 @@ export function ChatPermissionsView() {
                   </tr>
                 )
               })}
-              {chats.length === 0 && (
+              {visibleChats.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                    Nenhum chat reconhecido ainda. Envie uma mensagem no WhatsApp conectado.
+                    {search.trim() ? 'Nenhum chat corresponde à busca.' : 'Nenhum chat reconhecido ainda. Envie uma mensagem no WhatsApp conectado.'}
                   </td>
                 </tr>
               )}

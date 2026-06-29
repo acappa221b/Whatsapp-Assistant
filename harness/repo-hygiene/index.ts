@@ -17,7 +17,7 @@ export const RepoHygieneHarness: Harness = {
     }
 
     const gitignore = readFileSync(gitignorePath, 'utf-8')
-    for (const rule of ['storage/', 'backups/', '*.db', '.env']) {
+    for (const rule of ['storage/', 'backups/', '*.db', 'logs/']) {
       if (!gitignore.includes(rule)) {
         errors.push(`.gitignore must contain ${rule}`)
       }

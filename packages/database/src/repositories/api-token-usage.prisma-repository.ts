@@ -1,4 +1,4 @@
-import type { PrismaClient, ApiUsageCategory as PrismaApiUsageCategory } from '@prisma/client'
+import type { PrismaClient, ApiUsageCategory as PrismaApiUsageCategory, Prisma } from '@prisma/client'
 import type {
   ApiTokenUsageRecord,
   ApiTokenUsageRepository,
@@ -21,7 +21,7 @@ export class ApiTokenUsagePrismaRepository implements ApiTokenUsageRepository {
         tokensOutput: input.tokensOutput,
         tokensTotal: input.tokensTotal,
         costBrl: input.costBrl,
-        metadata: input.metadata ?? undefined,
+        metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
         occurredAt: input.occurredAt ?? new Date(),
       },
     })

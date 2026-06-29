@@ -1,0 +1,28 @@
+export const APP_DEFAULTS = {
+  port: 4000,
+  timezone: 'America/Sao_Paulo',
+  appName: 'WhatsApp Assistant',
+  appVersion: '1.4.0-rc14',
+  databaseRelativePath: 'packages/database/prisma/dev.db',
+  whatsappSessionPath: 'storage/whatsapp',
+  mediaStoragePath: 'storage/media',
+  tempStoragePath: 'storage/temp',
+  backupPath: 'backups',
+  companyName: '',
+  defaultCurrency: 'BRL',
+  logLevel: 'info' as const,
+  logPrettyPrint: true,
+  whatsappAutoReconnect: true,
+  whatsappReconnectDelayMs: 5000,
+  whatsappIgnoreHistory: true,
+  openaiModel: 'gpt-4o-mini',
+  openaiTimeoutMs: 60000,
+  openaiRetryAttempts: 3,
+  openaiRetryDelayMs: 1000,
+  openaiAvgCostPer1kTokensBrl: 0.002,
+  auditEnabled: true,
+  auditRetentionDays: 3650,
+  backupEnabled: true,
+} as const
+
+export type AppDefaults = typeof APP_DEFAULTS

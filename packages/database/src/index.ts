@@ -27,3 +27,13 @@ export { ExtractionPrismaRepository } from './repositories/extraction.prisma-rep
 export { ApiTokenUsagePrismaRepository } from './repositories/api-token-usage.prisma-repository'
 export { DashboardAnalyticsPrismaRepository } from './repositories/dashboard-analytics.prisma-repository'
 export { ConversationDailyReportPrismaRepository } from './repositories/conversation-daily-report.prisma-repository'
+export { AppSettingsPrismaRepository } from './repositories/app-settings.prisma-repository'
+export type { AppSettingsRecord, UpdateAppSettingsInput } from './repositories/app-settings.prisma-repository'
+export { AiProviderConfigPrismaRepository } from './repositories/ai-provider-config.prisma-repository'
+export type {
+  AiProviderConfigRecord,
+  CreateAiProviderInput,
+  UpdateAiProviderInput,
+} from './repositories/ai-provider-config.prisma-repository'
+export type { AiProviderType } from '@prisma/client'
+export { AssistantActionLogPrismaRepository } from './repositories/assistant-action-log.prisma-repository'

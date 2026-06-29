@@ -1,7 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { ZodError } from 'zod'
 import { createAppConfig } from './app.config'
+import { buildDefaultEnv, pickEnvOverrides } from './build-default-env'
 import { createDatabaseConfig } from './database.config'
 import {
   REPO_ROOT,
@@ -26,34 +25,7 @@ export type ResolvedConfig = {
   env: ParsedEnv
 }
 
-const ENV_PATH = resolve(REPO_ROOT, '.env')
-
 let cachedConfig: ResolvedConfig | null = null
-
-function parseDotEnv(content: string): Record<string, string> {
-  const result: Record<string, string> = {}
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#')) continue
-    const equalsIndex = line.indexOf('=')
-    if (equalsIndex < 0) continue
-    const key = line.slice(0, equalsIndex).trim()
-    let value = line.slice(equalsIndex + 1).trim()
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1)
-    }
-    result[key] = value
-  }
-  return result
-}
-
-function loadRootEnvFile(): Record<string, string> {
-  if (!existsSync(ENV_PATH)) return {}
-  return parseDotEnv(readFileSync(ENV_PATH, 'utf-8'))
-}
 
 function formatConfigError(error: ZodError): string {
   const details = error.issues
@@ -64,13 +36,13 @@ function formatConfigError(error: ZodError): string {
 
 export function createConfig(
   rawEnv: EnvSchemaInput = process.env,
-  options?: { skipEnvFile?: boolean },
+  options?: { overridesOnly?: boolean },
 ): ResolvedConfig {
-  const mergedEnv = options?.skipEnvFile
-    ? { ...rawEnv }
+  const mergedEnv = options?.overridesOnly
+    ? { ...buildDefaultEnv(), ...rawEnv }
     : {
-        ...loadRootEnvFile(),
-        ...rawEnv,
+        ...buildDefaultEnv(),
+        ...pickEnvOverrides(rawEnv as Record<string, string | boolean | number | undefined>),
       }
 
   const parsed = EnvSchema.safeParse(mergedEnv)
@@ -98,10 +70,7 @@ export function createConfig(
 }
 
 export function createConfigWithOverrides(overrides: EnvSchemaInput): ResolvedConfig {
-  return createConfig({
-    ...(process.env as Record<string, string | undefined>),
-    ...overrides,
-  })
+  return createConfig(overrides, { overridesOnly: true })
 }
 
 export function getConfig(): ResolvedConfig {
@@ -128,8 +97,6 @@ export function createProcessEnv(
     NODE_ENV: resolved.app.nodeEnv,
     TZ: resolved.app.timezone,
     DATABASE_URL: resolved.database.url,
-    OPENAI_API_KEY: resolved.openai.apiKey,
-    OPENAI_MODEL: resolved.openai.model,
   }
 }
 
@@ -139,6 +106,7 @@ export const config = new Proxy({} as ResolvedConfig, {
   },
 })
 
+export { APP_DEFAULTS } from './app.defaults'
 export { logOpenAIApiKeyPresence, calculateTokenCostBrl } from './openai.config'
 export type { OpenAIConfig } from './openai.config'
 export {

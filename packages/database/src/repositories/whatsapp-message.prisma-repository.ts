@@ -327,6 +327,15 @@ export class WhatsappMessagePrismaRepository implements WhatsappMessageRepositor
     })
   }
 
+  async updateContent(id: string, content: string): Promise<WhatsappMessage> {
+    const existing = await this.findById(id)
+    if (!existing) {
+      throw new Error(`WhatsappMessage not found: ${id}`)
+    }
+    const updated = existing.withProcessedContent(content)
+    return this.save(updated)
+  }
+
   private buildWhere(filters: WhatsappMessageListFilters) {
     const where: {
       processed?: boolean

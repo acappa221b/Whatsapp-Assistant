@@ -12,7 +12,15 @@ import {
 } from '@finance-ai/core/domains/agent-chat'
 import { RecordApiTokenUsageUseCase } from '@finance-ai/core/domains/api-token-usage'
 import { MediaProcessingPipeline } from '@finance-ai/core/domains/message-processing'
-import { OpenAIChatProvider } from '@finance-ai/ai'
+import { TranscribeAudioUseCase } from '@finance-ai/core/domains/audio-transcription'
+import { ProcessPhotoUseCase } from '@finance-ai/core/domains/photo-processing'
+import type { AgentChatProvider } from '@finance-ai/core/domains/agent-chat'
+import { MediaDownloader } from '@finance-ai/whatsapp/media'
+import {
+  createAgentChatProvider,
+  getUnifiedProvider,
+  hasAiProvider,
+} from '@/lib/ai/ai-provider-service'
 import {
   BackfillWhatsappMessageNamesUseCase,
   DeleteChatHistoryUseCase,
@@ -344,31 +352,86 @@ function ensureWhatsappPipelinesRegistered(): void {
     new ApiTokenUsagePrismaRepository(prisma),
     config.openai,
   )
-  const openAIChatProvider = new OpenAIChatProvider({
-    onTokenUsage: async (usage) => {
-      await recordTokenUsage.execute({
-        category: 'agent_message',
-        chatId: usage.chatId,
-        messageId: usage.messageId,
-        model: usage.model,
-        tokensInput: usage.tokensInput,
-        tokensOutput: usage.tokensOutput,
-      })
+  const onAgentTokenUsage = async (usage: {
+    tokensInput: number
+    tokensOutput: number
+    model: string
+    chatId?: string
+    messageId?: string
+  }) => {
+    await recordTokenUsage.execute({
+      category: 'agent_message',
+      chatId: usage.chatId,
+      messageId: usage.messageId,
+      model: usage.model,
+      tokensInput: usage.tokensInput,
+      tokensOutput: usage.tokensOutput,
+    })
+  }
+  const agentChatProvider: AgentChatProvider = {
+    generateReply: async (input) => {
+      const provider = await createAgentChatProvider(onAgentTokenUsage)
+      if (!provider) {
+        throw new Error('AI chat provider not configured')
+      }
+      return provider.generateReply(input)
     },
-  })
+  }
   const humanTakeoverUseCase = new HandleHumanTakeoverUseCase(runtime.chatConfigRepository)
   const pauseAfterDeferralUseCase = new PauseAgentAfterDeferralUseCase(runtime.chatConfigRepository)
   const processAgentAutoReplyUseCase = new ProcessAgentAutoReplyUseCase({
     chatConfigRepository: runtime.chatConfigRepository,
     messageRepository: runtime.messageRepository,
-    agentChatProvider: openAIChatProvider,
+    agentChatProvider,
     sendMessage: (message) => runtime.provider.sendMessage(message),
     isWhatsappConnected: () => runtime.provider.getStatus().status === 'connected',
     hasOpenAIKey: () => Boolean(config.openai.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim()),
+    hasAiProvider: () => hasAiProvider('chat'),
     pauseAfterDeferral: pauseAfterDeferralUseCase,
     agentOutboundTracker,
     replyDeduplicator: agentReplyDeduplicator,
   })
+  const mediaDownloader = new MediaDownloader()
+  const transcribeAudioUseCase = new TranscribeAudioUseCase(
+    runtime.chatConfigRepository,
+    runtime.messageRepository,
+    mediaDownloader,
+    {
+      transcribeAudio: async (filePath) => {
+        const provider = await getUnifiedProvider('transcription')
+        if (!provider) throw new Error('Transcription provider not configured')
+        const result = await provider.transcribeAudio(filePath)
+        return {
+          text: result.text,
+          tokensInput: result.tokensInput,
+          tokensOutput: result.tokensOutput,
+          model: result.model,
+        }
+      },
+    },
+    recordTokenUsage,
+    runtime.eventBus,
+  )
+  const processPhotoUseCase = new ProcessPhotoUseCase(
+    runtime.chatConfigRepository,
+    runtime.messageRepository,
+    mediaDownloader,
+    {
+      describeImage: async (filePath, prompt) => {
+        const provider = await getUnifiedProvider('vision')
+        if (!provider) throw new Error('Vision provider not configured')
+        const result = await provider.describeImage(filePath, prompt)
+        return {
+          text: result.text,
+          tokensInput: result.tokensInput,
+          tokensOutput: result.tokensOutput,
+          model: result.model,
+        }
+      },
+    },
+    recordTokenUsage,
+    runtime.eventBus,
+  )
   const agentAutoReplyPipeline = new AgentAutoReplyPipeline(
     runtime.eventBus,
     runtime.messageRepository,
@@ -380,6 +443,8 @@ function ensureWhatsappPipelinesRegistered(): void {
     runtime.eventBus,
     runtime.chatConfigRepository,
     runtime.messageRepository,
+    (messageId) => processPhotoUseCase.execute(messageId),
+    (messageId) => transcribeAudioUseCase.execute(messageId),
   )
 
   messagePipeline.register()

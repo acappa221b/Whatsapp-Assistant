@@ -15,10 +15,6 @@ export type OpenAIConfig = {
 }
 
 export function createOpenAIConfig(env: ParsedEnv): OpenAIConfig {
-  if (env.NODE_ENV === 'production' && !env.OPENAI_API_KEY.trim()) {
-    throw new Error('Invalid environment configuration: OPENAI_API_KEY is required')
-  }
-
   return {
     apiKey: env.OPENAI_API_KEY,
     model: env.OPENAI_MODEL,

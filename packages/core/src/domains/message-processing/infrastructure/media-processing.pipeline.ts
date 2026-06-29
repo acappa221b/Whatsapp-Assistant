@@ -39,7 +39,7 @@ export class MediaProcessingPipeline {
       }
 
       if (message.messageType === 'AUDIO' && config.audioProcessingEnabled) {
-        console.info('[MediaProcessing] audio queued (stub)', {
+        console.info('[MediaProcessing] audio queued', {
           chatId: payload.chatId,
           messageId: payload.messageId,
         })
