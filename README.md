@@ -153,19 +153,23 @@ Detalhes: [docs/refactor/deprecated-modules.md](docs/refactor/deprecated-modules
 
 ## Começar em 2 minutos (Windows / Mac / Linux)
 
-1. Instale [Node.js 20+](https://nodejs.org)
-2. Clone o repositório
-3. Execute o launcher na pasta do projeto:
-   - **Windows:** duplo-clique em `Start WhatsApp Assistant.bat`
-   - **macOS:** duplo-clique em `Start WhatsApp Assistant.command`
-   - **Terminal:** `pnpm launch` ou `node scripts/launch.mjs`
-4. O navegador abrirá em [http://localhost:4000](http://localhost:4000)
-5. Em **Configurações**, adicione sua chave de IA
-6. Em **WhatsApp**, escaneie o QR Code
-7. Em **Permissões**, habilite os chats desejados
+1. Clone o repositório
+2. Execute o launcher na pasta do projeto:
+   - **Windows:** duplo-clique em `Start WhatsApp Assistant.bat` — **não precisa instalar Node manualmente**; na primeira execução o launcher baixa Node.js 20 LTS para `tools/node/` (somente neste PC)
+   - **macOS:** duplo-clique em `Start WhatsApp Assistant.command` (instale [Node.js 20+](https://nodejs.org) antes)
+   - **Terminal:** `pnpm launch` ou `node scripts/launch.mjs` (requer Node 20+ no PATH)
+3. O navegador abrirá em [http://localhost:4000](http://localhost:4000)
+4. Em **Configurações**, adicione sua chave de IA
+5. Em **WhatsApp**, escaneie o QR Code
+6. Em **Permissões**, habilite os chats desejados
+
+### Windows sem Node instalado
+
+Duplo-clique no `.bat` → download automático do Node portátil → instalação de dependências → browser em `:4000`. A segunda execução reutiliza `tools/node/` sem baixar de novo.
 
 ### O que fica só no seu computador
 
+- `tools/node/` — Node.js portátil (Windows, bootstrap automático)
 - `storage/` — sessão WhatsApp e mídias
 - `packages/database/prisma/dev.db` — mensagens e relatórios
 - `backups/`

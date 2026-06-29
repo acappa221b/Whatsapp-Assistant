@@ -15,6 +15,7 @@ storage/
 !storage/.gitkeep
 backups/
 logs/
+tools/node/
 *.db
 *.db-journal
 *.db-wal

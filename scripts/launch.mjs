@@ -31,9 +31,13 @@ function checkNode() {
   const version = process.versions.node
   const major = Number(version.split('.')[0])
   if (major < 20) {
-    log(`Node ${version} detectado — requer Node 20+. Instale em https://nodejs.org`)
+    log(
+      `Node ${version} detectado — requer Node 20+. ` +
+        `No Windows, execute Start WhatsApp Assistant.bat para instalar automaticamente.`,
+    )
     process.exit(1)
   }
+  log(`Node ${version} (${process.execPath})`)
 }
 
 function needsInstall() {
