@@ -24,8 +24,10 @@ export type RecordApiTokenUsageInput = {
   chatId?: string | null
   messageId?: string | null
   model: string
+  provider?: string
   tokensInput: number
   tokensOutput: number
+  audioDurationSec?: number
   metadata?: Record<string, unknown> | null
   occurredAt?: Date
 }

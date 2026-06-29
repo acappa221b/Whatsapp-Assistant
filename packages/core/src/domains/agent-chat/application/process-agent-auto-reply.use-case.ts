@@ -47,6 +47,10 @@ export type AgentChatProvider = {
   generateReply(input: AgentReplyInput): Promise<AgentReplyOutput>
 }
 
+export function stripMediaPrefix(text: string): string {
+  return text.replace(/^\[(ÁUDIO|AUDIO|FOTO)\]\s*/i, '').trim()
+}
+
 export type ProcessAgentAutoReplyDeps = {
   chatConfigRepository: WhatsappChatConfigRepository
   messageRepository: WhatsappMessageRepository
@@ -87,15 +91,36 @@ export class ProcessAgentAutoReplyUseCase {
     if (message.messageType === 'TEXT') {
       incomingText = message.content.trim()
     } else if (message.messageType === 'AUDIO') {
-      if (!config.audioProcessingEnabled) return
-      if (!isTranscribedAudioContent(message.content)) return
+      if (!config.audioProcessingEnabled) {
+        console.info('[AgentChat] skip audio reply', {
+          chatId: message.chatId,
+          displayNumber: config.displayNumber,
+          reason: 'audio-processing-disabled',
+        })
+        return
+      }
+      if (!isTranscribedAudioContent(message.content)) {
+        console.info('[AgentChat] skip audio reply', {
+          chatId: message.chatId,
+          displayNumber: config.displayNumber,
+          reason: 'not-transcribed-yet',
+        })
+        return
+      }
       incomingText = message.content.trim()
     } else if (message.messageType === 'IMAGE') {
       if (!config.photoProcessingEnabled) {
         await this.sendFixedReply(message, config.displayNumber, PHOTO_PENDING_AGENT_REPLY)
         return
       }
-      if (!isProcessedPhotoContent(message.content)) return
+      if (!isProcessedPhotoContent(message.content)) {
+        console.info('[AgentChat] skip photo reply', {
+          chatId: message.chatId,
+          displayNumber: config.displayNumber,
+          reason: 'not-processed-yet',
+        })
+        return
+      }
       incomingText = message.content.trim()
     }
 
@@ -143,7 +168,8 @@ export class ProcessAgentAutoReplyUseCase {
       }))
       .filter((entry) => entry.content)
 
-    const skipDecision = shouldSkipBeforeLLM(incomingText, recentContext)
+    const incomingForSkip = stripMediaPrefix(incomingText)
+    const skipDecision = shouldSkipBeforeLLM(incomingForSkip, recentContext)
     if (skipDecision.skip) {
       console.info('[AgentChat] skip', {
         chatId: message.chatId,
@@ -153,7 +179,7 @@ export class ProcessAgentAutoReplyUseCase {
       return
     }
 
-    if (shouldDeferInviteBeforeLLM(incomingText)) {
+    if (shouldDeferInviteBeforeLLM(incomingForSkip)) {
       await this.sendDeferral(message, displayNumber, DEFAULT_AGENT_DEFER_PHRASE)
       return
     }

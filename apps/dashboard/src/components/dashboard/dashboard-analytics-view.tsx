@@ -91,8 +91,11 @@ export function DashboardAnalyticsView() {
       ? metrics?.costs.costBrl ?? []
       : metrics?.costs.costByCategory[costFilter as Exclude<CostCategoryFilter, 'total'>] ?? []
 
+  const monthCostTotal =
+    metrics?.costs.costBrl.reduce((sum, point) => sum + point.count, 0) ?? 0
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
@@ -135,6 +138,17 @@ export function DashboardAnalyticsView() {
 
           <section className="space-y-4">
             <h2 className="text-lg font-semibold">Gastos</h2>
+            <Card className="border-border/60 bg-card/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Gasto estimado no mês</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-2xl font-semibold">{formatBrl(monthCostTotal)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Valores estimados conforme tabela de preços por provedor/modelo.
+                </p>
+              </CardContent>
+            </Card>
             <div className="grid gap-4 lg:grid-cols-2">
               <DailyBarChart
                 title="Token Usage"

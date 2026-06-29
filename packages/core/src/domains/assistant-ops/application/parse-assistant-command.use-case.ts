@@ -7,6 +7,13 @@ export type CommandParserPort = {
 const SEND_KEYWORDS = /(envia|enviar|manda|mandar|dispara|disparar)/i
 const ALL_KEYWORDS = /(todos|todas|habilitados|contatos|chats)/i
 
+const RELATIONAL_SUFFIX =
+  /\s+(minha esposa|meu marido|minha mae|minha mãe|meu filho|minha filha|meu pai)$/i
+
+function cleanNameQuery(name: string): string {
+  return name.replace(RELATIONAL_SUFFIX, '').trim()
+}
+
 function heuristicParse(message: string): AssistantCommand {
   const trimmed = message.trim()
   const lower = trimmed.toLowerCase()
@@ -32,18 +39,20 @@ function heuristicParse(message: string): AssistantCommand {
       }
     }
 
-    const forMatch = trimmed.match(/(?:para|pra)\s+(?:a\s+)?(.+)$/i)
+    const forMatch = trimmed.match(/(?:para|pra)\s+(?:a\s+|o\s+)?(.+)$/i)
     const namePart = forMatch?.[1]?.trim()
     if (namePart) {
-      const names = namePart
+      const cleaned = cleanNameQuery(namePart)
+      const names = cleaned
         .split(/\s+e\s+|\s*,\s*/i)
         .map((part) => part.replace(/^(a|o)\s+/i, '').trim())
+        .map(cleanNameQuery)
         .filter(Boolean)
       return {
         action: 'send_message',
         messageText: messageText ?? (composeInstruction ? null : 'Olá!'),
         composeInstruction,
-        targets: [{ type: 'by_names', nameQueries: names.length ? names : [namePart] }],
+        targets: [{ type: 'by_names', nameQueries: names.length ? names : [cleaned || namePart] }],
         requiresConfirmation: true,
       }
     }

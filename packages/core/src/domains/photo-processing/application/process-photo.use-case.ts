@@ -69,6 +69,7 @@ export class ProcessPhotoUseCase {
       chatId: message.chatId,
       messageId,
       model: vision.model,
+      provider: vision.model.startsWith('gemini') ? 'gemini' : 'openai',
       tokensInput: vision.tokensInput,
       tokensOutput: vision.tokensOutput,
     })

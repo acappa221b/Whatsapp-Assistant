@@ -4,7 +4,7 @@ import { formatAudioContent } from '@finance-ai/shared/utils'
 import type { WhatsappChatConfigRepository } from '../../whatsapp-chat-config/domain/whatsapp-chat-config.repository'
 import type { WhatsappMessageRepository } from '../../whatsapp-message/domain/whatsapp-message.repository'
 import type { RecordApiTokenUsageUseCase } from '../../api-token-usage/application/record-api-token-usage.use-case'
-import { writeFile } from 'node:fs/promises'
+import { writeFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { config } from '@finance-ai/shared/config'
 
@@ -65,13 +65,27 @@ export class TranscribeAudioUseCase {
     const transcriptAbsolute = resolve(config.storage.mediaPath, transcriptPath)
     await writeFile(transcriptAbsolute, result.text, 'utf8').catch(() => undefined)
 
+    let audioDurationSec: number | undefined
+    if (result.tokensInput + result.tokensOutput === 0) {
+      try {
+        const fileStat = await stat(stored.absolutePath)
+        audioDurationSec = Math.max(1, fileStat.size / 16_000)
+      } catch {
+        audioDurationSec = 30
+      }
+    }
+
+    const providerName = result.model.includes('whisper') ? 'openai' : undefined
+
     await this.recordTokenUsage.execute({
       category: 'audio_processing',
       chatId: message.chatId,
       messageId,
       model: result.model,
+      provider: providerName,
       tokensInput: result.tokensInput,
       tokensOutput: result.tokensOutput,
+      audioDurationSec,
     })
 
     await this.eventBus.publish({

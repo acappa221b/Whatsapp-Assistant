@@ -5,6 +5,10 @@ import { createResult } from '../types'
 
 const ROOT = join(import.meta.dirname, '../..')
 const EVENTS_ROUTE = join(ROOT, 'apps/dashboard/src/app/api/whatsapp/events/route.ts')
+const WHATSAPP_PANEL = join(
+  ROOT,
+  'apps/dashboard/src/components/whatsapp/whatsapp-connection-panel.tsx',
+)
 const WHATSAPP_PAGE = join(ROOT, 'apps/dashboard/src/app/dashboard/whatsapp/page.tsx')
 const ADR = join(ROOT, 'docs/adr/005-whatsapp-qr-sse.md')
 
@@ -25,12 +29,21 @@ export const QrCodeHarness: Harness = {
       }
     }
 
+    if (!existsSync(WHATSAPP_PANEL)) {
+      errors.push('Missing WhatsappConnectionPanel component')
+    } else {
+      const panel = readFileSync(WHATSAPP_PANEL, 'utf-8')
+      if (!panel.includes('EventSource')) {
+        errors.push('WhatsApp connection panel must consume EventSource for QR updates')
+      }
+    }
+
     if (!existsSync(WHATSAPP_PAGE)) {
-      errors.push('Missing /dashboard/whatsapp page')
+      errors.push('Missing /dashboard/whatsapp redirect page')
     } else {
       const page = readFileSync(WHATSAPP_PAGE, 'utf-8')
-      if (!page.includes('EventSource')) {
-        errors.push('WhatsApp page must consume EventSource for QR updates')
+      if (!page.includes('/dashboard/settings?tab=whatsapp')) {
+        errors.push('WhatsApp page must redirect to settings WhatsApp tab')
       }
     }
 

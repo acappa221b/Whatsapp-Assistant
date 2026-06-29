@@ -1,6 +1,7 @@
 import type { EventBus } from '@finance-ai/core/events'
 import { DomainEvents } from '@finance-ai/core/events'
 import { isLegacyAgentOutboundMessage } from '@finance-ai/shared/utils'
+import { WhatsappMessage } from '../../whatsapp-message/domain/whatsapp-message.entity'
 import type { WhatsappMessageRepository } from '../../whatsapp-message/domain/whatsapp-message.repository'
 import type { AgentOutboundTracker } from '../application/agent-outbound-tracker'
 import { HandleHumanTakeoverUseCase } from '../application/handle-human-takeover.use-case'
@@ -57,7 +58,36 @@ export class AgentAutoReplyPipeline {
     const onMediaCompleted = async (payload: MediaCompletedPayload) => {
       const message = await this.messageRepository.findById(payload.messageId)
       if (!message || message.fromMe) return
-      await this.processAgentAutoReply.execute(message)
+      const content =
+        payload.content?.trim() && message.content.trim() !== payload.content.trim()
+          ? payload.content.trim()
+          : message.content
+      const enriched =
+        content !== message.content
+          ? WhatsappMessage.reconstitute({
+              id: message.id,
+              externalMessageId: message.externalMessageId,
+              chatId: message.chatId,
+              chatName: message.chatName,
+              sender: message.sender,
+              senderId: message.senderId,
+              senderName: message.senderName,
+              content,
+              messageType: message.messageType,
+              rawPayload: message.rawPayload,
+              mediaUrl: message.mediaUrl,
+              mimeType: message.mimeType,
+              fileName: message.fileName,
+              fileSize: message.fileSize,
+              storagePath: message.storagePath,
+              fromMe: message.fromMe,
+              sourceAgent: message.sourceAgent,
+              processed: message.processed,
+              receivedAt: message.receivedAt,
+              createdAt: message.createdAt,
+            })
+          : message
+      await this.processAgentAutoReply.execute(enriched)
     }
 
     const unsubTranscription = this.eventBus.subscribe(

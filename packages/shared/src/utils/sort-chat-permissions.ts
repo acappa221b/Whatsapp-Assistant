@@ -44,11 +44,17 @@ export function sortChats<T extends SortableChatRow>(rows: T[], sort: SortState)
 
   indexed.sort((a, b) => {
     if (sort.column === 'name') {
-      const la = formatChatListLabel(a.row.displayNumber, a.row.name)
-      const lb = formatChatListLabel(b.row.displayNumber, b.row.name)
-      const cmp = la.localeCompare(lb, 'pt-BR', { sensitivity: 'base' })
-      if (cmp !== 0) return cmp * dir
-      return a.row.displayNumber - b.row.displayNumber
+      const numCmp = a.row.displayNumber - b.row.displayNumber
+      if (numCmp !== 0) return numCmp * dir
+      const normalize = (value: string | null) =>
+        (value ?? '')
+          .normalize('NFD')
+          .replace(/\p{M}/gu, '')
+          .toLowerCase()
+          .trim()
+      const la = normalize(a.row.name)
+      const lb = normalize(b.row.name)
+      return la.localeCompare(lb, 'pt-BR', { sensitivity: 'base' }) * dir
     }
 
     const col = sort.column as Exclude<SortColumn, 'name'>

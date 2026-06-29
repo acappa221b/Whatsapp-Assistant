@@ -4,6 +4,17 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { WhatsappConnectionPanel } from '@/components/whatsapp/whatsapp-connection-panel'
+
+const TABS = ['geral', 'provedores', 'whatsapp', 'relatorios'] as const
+type TabId = (typeof TABS)[number]
+
+const TAB_LABELS: Record<TabId, string> = {
+  geral: 'Geral',
+  provedores: 'Provedores IA',
+  whatsapp: 'WhatsApp',
+  relatorios: 'Relatórios',
+}
 
 type ProviderRow = {
   id: string
@@ -56,6 +67,8 @@ export default function SettingsPage() {
 function SettingsPageContent() {
   const searchParams = useSearchParams()
   const showWelcome = searchParams.get('welcome') === '1'
+  const tabParam = searchParams.get('tab')
+  const [tab, setTab] = useState<TabId>('geral')
 
   const [providers, setProviders] = useState<ProviderRow[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
@@ -91,6 +104,12 @@ function SettingsPageContent() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (tabParam && TABS.includes(tabParam as TabId)) {
+      setTab(tabParam as TabId)
+    }
+  }, [tabParam])
 
   async function addProvider() {
     if (!form.displayName.trim() || !form.apiKey.trim()) return
@@ -150,7 +169,7 @@ function SettingsPageContent() {
                   Adicione um provedor de IA (OpenAI, Gemini ou DeepSeek) abaixo
                 </li>
                 <li>
-                  Vá em <a href="/dashboard/whatsapp" className="underline">WhatsApp</a> e escaneie o QR Code
+                  Vá na aba <button type="button" className="underline" onClick={() => setTab('whatsapp')}>WhatsApp</button> e escaneie o QR Code
                 </li>
                 <li>
                   Em <a href="/dashboard/permissions" className="underline">Permissões</a>, habilite os chats desejados
@@ -165,7 +184,22 @@ function SettingsPageContent() {
 
         {loading ? <p className="text-sm text-muted-foreground">Carregando…</p> : null}
 
-        {settings ? (
+        <div className="flex flex-wrap gap-2 border-b border-border/60 pb-2">
+          {TABS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                tab === id ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/40'
+              }`}
+            >
+              {TAB_LABELS[id]}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'geral' && settings ? (
           <Card className="border-border/60 bg-card/60">
             <CardHeader>
               <CardTitle className="text-base">Aplicativo</CardTitle>
@@ -230,6 +264,8 @@ function SettingsPageContent() {
           </Card>
         ) : null}
 
+        {tab === 'provedores' ? (
+        <>
         <Card className="border-border/60 bg-card/60">
           <CardHeader>
             <CardTitle className="text-base">Adicionar provedor</CardTitle>
@@ -339,6 +375,46 @@ function SettingsPageContent() {
                   </select>
                 </label>
               ))}
+            </CardContent>
+          </Card>
+        ) : null}
+        </>
+        ) : null}
+
+        {tab === 'whatsapp' ? (
+          <Card className="border-border/60 bg-card/60">
+            <CardHeader>
+              <CardTitle className="text-base">Conexão WhatsApp</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <WhatsappConnectionPanel />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {tab === 'relatorios' && settings ? (
+          <Card className="border-border/60 bg-card/60">
+            <CardHeader>
+              <CardTitle className="text-base">Agendamento automático</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-end gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.reportAutoEnabled}
+                  onChange={(e) => void patchSettings({ reportAutoEnabled: e.target.checked })}
+                />
+                Gerar relatórios automaticamente todo dia
+              </label>
+              <label className="text-sm">
+                Horário (HH:mm)
+                <input
+                  type="time"
+                  className="ml-2 rounded-md border bg-background px-2 py-1"
+                  value={settings.reportAutoTime}
+                  onChange={(e) => void patchSettings({ reportAutoTime: e.target.value })}
+                />
+              </label>
             </CardContent>
           </Card>
         ) : null}

@@ -10,7 +10,6 @@ const NAV_ITEMS = [
   { href: '/dashboard/assistant', label: 'Chat IA', accent: 'pink' as const },
   { href: '/dashboard', label: 'Dashboard', accent: 'orange' as const },
   { href: '/dashboard/messages', label: 'Mensagens', accent: 'pink' as const },
-  { href: '/dashboard/whatsapp', label: 'WhatsApp', accent: 'green' as const },
   { href: '/dashboard/reports', label: 'Relatórios', accent: 'orange' as const },
   { href: '/dashboard/settings', label: 'Configurações', accent: 'orange' as const },
 ] as const
@@ -59,7 +58,7 @@ export function AppSidebar() {
         })}
       </nav>
       <div className="border-t border-border/60 px-5 py-4">
-        <p className="text-xs text-muted-foreground">v1.4.0-rc14</p>
+        <p className="text-xs text-muted-foreground">v1.4.1-rc15</p>
       </div>
     </aside>
   )

@@ -35,9 +35,15 @@ const rows: SortableChatRow[] = [
 ]
 
 describe('sortChats', () => {
-  it('sorts names pt-BR ascending', () => {
-    const sorted = sortChats(rows, { column: 'name', direction: 'asc' })
-    expect(sorted.map((r) => r.displayNumber)).toEqual([1, 2, 3])
+  it('sorts by displayNumber numerically (#1, #2, #10, #100)', () => {
+    const numericRows: SortableChatRow[] = [
+      { ...rows[0]!, displayNumber: 10, name: 'Alice' },
+      { ...rows[1]!, displayNumber: 2, name: 'Bruno' },
+      { ...rows[2]!, displayNumber: 100, name: 'Carlos' },
+      { ...rows[1]!, chatId: 'd@lid', displayNumber: 1, name: 'Diana' },
+    ]
+    const sorted = sortChats(numericRows, { column: 'name', direction: 'asc' })
+    expect(sorted.map((r) => r.displayNumber)).toEqual([1, 2, 10, 100])
   })
 
   it('sorts names descending', () => {

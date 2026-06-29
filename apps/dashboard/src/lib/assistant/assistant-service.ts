@@ -2,11 +2,11 @@ import { formatChatListLabel } from '@finance-ai/shared/utils'
 import {
   ComposeAssistantMessageUseCase,
   ExecuteAssistantCommandUseCase,
-  ParseAssistantCommandUseCase,
   QueryAssistantKnowledgeUseCase,
   ResolveAssistantTargetsUseCase,
-  type ResolvedTarget,
+  heuristicParse,
   type AssistantPreview,
+  type AssistantCommand,
 } from '@finance-ai/core/domains/assistant-ops'
 import { prisma, AssistantActionLogPrismaRepository } from '@finance-ai/database'
 import { getUnifiedProvider } from '@/lib/ai/ai-provider-service'
@@ -30,6 +30,12 @@ export type AssistantChatResponse =
   | { phase: 'error'; message: string }
 
 let lastSendAt = 0
+
+function extractJsonFromText(text: string): unknown {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]
+  const raw = fenced ?? text
+  return JSON.parse(raw.trim())
+}
 
 async function loadChatConfigs() {
   return prisma.whatsappChatConfig.findMany({
@@ -55,6 +61,104 @@ function buildAssistantMessage(preview: AssistantPreview): string {
   return `Vou enviar "${preview.text}" para ${names}. Confirma?${warnings}`
 }
 
+async function parseWithLlm(
+  message: string,
+  history: AssistantHistoryEntry[] | undefined,
+): Promise<AssistantCommand> {
+  const provider = await getUnifiedProvider('assistant')
+  if (!provider) {
+    throw new Error('Configure um provedor de IA em Configurações para usar o Chat IA.')
+  }
+
+  const result = await provider.chatCompletion({
+    system: [
+      'Você classifica pedidos do operador do WhatsApp Assistant.',
+      'Responda APENAS JSON válido com uma das ações:',
+      '{ "action":"query", "question":"...", "sources":["reports"|"messages"|"both"] }',
+      '{ "action":"send_message", "messageText":"..."|null, "composeInstruction":"..."|null, "targets":[...], "requiresConfirmation":true }',
+      '{ "action":"clarify", "question":"..." }',
+      '{ "action":"refuse", "reason":"..." }',
+      'targets: all_archive_enabled | all_agent_enabled | chat_ids | by_names',
+    ].join('\n'),
+    user: message,
+    history,
+  })
+
+  try {
+    const parsed = extractJsonFromText(result.text) as { action: string }
+    if (
+      parsed.action === 'query' ||
+      parsed.action === 'send_message' ||
+      parsed.action === 'clarify' ||
+      parsed.action === 'refuse'
+    ) {
+      return parsed as AssistantCommand
+    }
+  } catch {
+    // fallback below
+  }
+
+  return heuristicParse(message)
+}
+
+async function handleSendMessage(
+  command: Extract<AssistantCommand, { action: 'send_message' }>,
+  userMessage: string,
+): Promise<AssistantChatResponse> {
+  await ensureWhatsappReady()
+
+  const chats = await loadChatConfigs()
+  const resolver = new ResolveAssistantTargetsUseCase(chats)
+  const resolved = resolver.execute(command.targets)
+  if (!resolved.ok) {
+    return { phase: 'answer', text: resolved.clarify }
+  }
+
+  const provider = await getUnifiedProvider('assistant')
+  if (!provider) {
+    return { phase: 'error', message: 'Configure um provedor de IA em Configurações.' }
+  }
+
+  const composer = new ComposeAssistantMessageUseCase({
+    compose: async (instruction) => {
+      const result = await provider.chatCompletion({
+        system: 'Redija mensagens curtas e naturais para WhatsApp em português brasileiro. Sem markdown.',
+        user: `Instrução: ${instruction}`,
+      })
+      return result.text.trim()
+    },
+  })
+
+  let text: string
+  try {
+    text = await composer.execute({
+      messageText: command.messageText,
+      composeInstruction: command.composeInstruction,
+    })
+  } catch (error) {
+    return {
+      phase: 'error',
+      message: error instanceof Error ? error.message : 'Não foi possível compor a mensagem.',
+    }
+  }
+
+  const preview: AssistantPreview = {
+    action: 'send_message',
+    text,
+    targets: resolved.targets,
+    warnings: resolved.warnings,
+    needsExtraConfirm: resolved.targets.length > 20,
+  }
+
+  const actionToken = createActionToken(preview, userMessage)
+  return {
+    phase: 'preview',
+    actionToken,
+    preview,
+    assistantMessage: buildAssistantMessage(preview),
+  }
+}
+
 export async function handleAssistantChat(input: {
   message: string
   history?: AssistantHistoryEntry[]
@@ -63,7 +167,6 @@ export async function handleAssistantChat(input: {
   previewText?: string
   extraConfirm?: string
 }): Promise<AssistantChatResponse> {
-  await ensureWhatsappReady()
   const provider = await getUnifiedProvider('assistant')
   if (!provider) {
     return {
@@ -76,6 +179,7 @@ export async function handleAssistantChat(input: {
   const actionLog = new AssistantActionLogPrismaRepository(prisma)
 
   if (input.confirmAction && input.actionToken) {
+    await ensureWhatsappReady()
     const now = Date.now()
     if (now - lastSendAt < 30_000) {
       return { phase: 'error', message: 'Aguarde 30 segundos entre envios.' }
@@ -108,34 +212,21 @@ export async function handleAssistantChat(input: {
     return { phase: 'done', sent: result.sent, chatIds: result.chatIds }
   }
 
-  const parser = new ParseAssistantCommandUseCase({
-    parse: async ({ message, history }) => {
-      const result = await provider.chatCompletion({
-        system: [
-          'Você classifica pedidos do operador do WhatsApp Assistant.',
-          'Responda APENAS JSON válido com uma das ações:',
-          '{ "action":"query", "question":"...", "sources":["reports"|"messages"|"both"] }',
-          '{ "action":"send_message", "messageText":"..."|null, "composeInstruction":"..."|null, "targets":[...], "requiresConfirmation":true }',
-          '{ "action":"clarify", "question":"..." }',
-          '{ "action":"refuse", "reason":"..." }',
-          'targets: all_archive_enabled | all_agent_enabled | chat_ids | by_names',
-        ].join('\n'),
-        user: message,
-        history,
-      })
-      try {
-        const parsed = JSON.parse(result.text) as { action: string }
-        if (parsed.action === 'query' || parsed.action === 'send_message' || parsed.action === 'clarify' || parsed.action === 'refuse') {
-          return parsed as never
-        }
-      } catch {
-        // fallback below
+  const heuristic = heuristicParse(input.message)
+  let command: AssistantCommand
+  if (heuristic.action === 'send_message') {
+    command = heuristic
+  } else {
+    try {
+      command = await parseWithLlm(input.message, input.history)
+    } catch (error) {
+      console.error('[assistant/chat] parse failed', error, { message: input.message })
+      return {
+        phase: 'error',
+        message: error instanceof Error ? error.message : 'Não foi possível interpretar o pedido.',
       }
-      return new ParseAssistantCommandUseCase().execute({ message, history })
-    },
-  })
-
-  const command = await parser.execute({ message: input.message, history: input.history })
+    }
+  }
 
   if (command.action === 'refuse') {
     return { phase: 'answer', text: command.reason }
@@ -229,50 +320,7 @@ export async function handleAssistantChat(input: {
     return { phase: 'answer', text: answer }
   }
 
-  const resolver = new ResolveAssistantTargetsUseCase(chats)
-  const resolved = resolver.execute(command.targets)
-  if (!resolved.ok) {
-    return { phase: 'answer', text: resolved.clarify }
-  }
-
-  const composer = new ComposeAssistantMessageUseCase({
-    compose: async (instruction) => {
-      const result = await provider.chatCompletion({
-        system: 'Redija mensagens curtas e naturais para WhatsApp em português brasileiro. Sem markdown.',
-        user: `Instrução: ${instruction}`,
-      })
-      return result.text.trim()
-    },
-  })
-
-  let text: string
-  try {
-    text = await composer.execute({
-      messageText: command.messageText,
-      composeInstruction: command.composeInstruction,
-    })
-  } catch (error) {
-    return {
-      phase: 'error',
-      message: error instanceof Error ? error.message : 'Não foi possível compor a mensagem.',
-    }
-  }
-
-  const preview: AssistantPreview = {
-    action: 'send_message',
-    text,
-    targets: resolved.targets,
-    warnings: resolved.warnings,
-    needsExtraConfirm: resolved.targets.length > 20,
-  }
-
-  const actionToken = createActionToken(preview, input.message)
-  return {
-    phase: 'preview',
-    actionToken,
-    preview,
-    assistantMessage: buildAssistantMessage(preview),
-  }
+  return handleSendMessage(command, input.message)
 }
 
 export async function listRecentAssistantActions(limit = 10) {

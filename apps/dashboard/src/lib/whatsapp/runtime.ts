@@ -348,10 +348,7 @@ function ensureWhatsappPipelinesRegistered(): void {
     agentOutboundTracker,
     runtime.messageRepository,
   )
-  const recordTokenUsage = new RecordApiTokenUsageUseCase(
-    new ApiTokenUsagePrismaRepository(prisma),
-    config.openai,
-  )
+  const recordTokenUsage = new RecordApiTokenUsageUseCase(new ApiTokenUsagePrismaRepository(prisma))
   const onAgentTokenUsage = async (usage: {
     tokensInput: number
     tokensOutput: number
@@ -364,6 +361,7 @@ function ensureWhatsappPipelinesRegistered(): void {
       chatId: usage.chatId,
       messageId: usage.messageId,
       model: usage.model,
+      provider: 'openai',
       tokensInput: usage.tokensInput,
       tokensOutput: usage.tokensOutput,
     })

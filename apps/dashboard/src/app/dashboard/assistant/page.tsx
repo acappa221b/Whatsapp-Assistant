@@ -72,6 +72,26 @@ export default function AssistantPage() {
         assistantMessage?: string
       }
 
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: data.message ?? data.text ?? `Erro HTTP ${res.status}`,
+            meta: 'query',
+          },
+        ])
+        return
+      }
+
+      if (data.phase === 'error') {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: data.message ?? 'Não foi possível processar.', meta: 'query' },
+        ])
+        return
+      }
+
       if (data.phase === 'preview' && data.actionToken && data.preview) {
         setPreview({
           actionToken: data.actionToken,

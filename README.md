@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.4.0-rc14  
-**Fase:** RC-14 Mensagens WhatsApp + OSS zero-config + Launcher  
+**Versão:** 1.4.1-rc15  
+**Fase:** RC-15 Dashboard scroll + custos + assistant multimodal  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -43,11 +43,10 @@ Assistente de memória conversacional via WhatsApp — captura, organização, i
 | `/dashboard/assistant` | **Chat IA** (relatórios + ações) |
 | `/dashboard` | Sumário |
 | `/dashboard/messages` | Mensagens (somente chats com `archiveEnabled`) |
-| `/dashboard/whatsapp` | WhatsApp |
 | `/dashboard/reports` | Relatórios diários |
-| `/dashboard/settings` | **Configurações** (provedores IA, agendamento) |
+| `/dashboard/settings` | **Configurações** (geral, provedores IA, **WhatsApp**, relatórios) |
 
-Redirect: `/` → `/dashboard` · `/dashboard/chats` → `/dashboard/permissions`
+Redirect: `/` → `/dashboard` · `/dashboard/chats` → `/dashboard/permissions` · `/dashboard/whatsapp` → `/dashboard/settings?tab=whatsapp`
 
 ---
 
@@ -210,6 +209,7 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.4.1-rc15 | RC-15: scroll dashboard, custos estimados, sort #N, WhatsApp em Configurações, fix agent multimídia e Chat IA |
 | 1.4.0-rc14 | RC-14: mensagens estilo WhatsApp, zero `.env`, launcher, config no dashboard |
 | 1.3.1-rc13 | RC-13: permissões ordenáveis, Chat IA operacional (preview/send) |
 | 1.1.1-rc10b | RC-10B: skip ack/status, anti-repetição, anti-convite na resposta IA |

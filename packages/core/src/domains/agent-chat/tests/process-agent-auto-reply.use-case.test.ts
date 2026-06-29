@@ -269,6 +269,50 @@ describe('ProcessAgentAutoReplyUseCase', () => {
     expect(generateReply).not.toHaveBeenCalled()
     expect(sendMessage).not.toHaveBeenCalled()
   })
+
+  it('replies to transcribed audio with short text after media prefix', async () => {
+    const chatRepo = new InMemoryWhatsappChatConfigRepository()
+    const messageRepo = new InMemoryWhatsappMessageRepository()
+    const tracker = new AgentOutboundTracker()
+    await chatRepo.save(
+      WhatsappChatConfig.create({
+        chatId: CHAT_ID,
+        archiveEnabled: true,
+        agentChatEnabled: true,
+        audioProcessingEnabled: true,
+      }),
+    )
+
+    const sendMessage = vi.fn().mockResolvedValue(undefined)
+    const generateReply = vi.fn().mockResolvedValue({
+      action: 'reply',
+      replyText: 'Oi! Tudo bem?',
+      shouldDefer: false,
+    })
+    const useCase = new ProcessAgentAutoReplyUseCase(
+      createDeps(chatRepo, messageRepo, tracker, {
+        agentChatProvider: { generateReply },
+        sendMessage,
+      }),
+    )
+
+    const audioMessage = WhatsappMessage.create({
+      id: 'audio-1',
+      externalMessageId: 'ext-audio-1',
+      chatId: CHAT_ID,
+      sender: 'Maiara',
+      senderId: '5522@s.whatsapp.net',
+      content: '[ÁUDIO] oi',
+      messageType: 'AUDIO',
+      rawPayload: {},
+      fromMe: false,
+      receivedAt: new Date(),
+    })
+
+    await useCase.execute(audioMessage)
+    expect(generateReply).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalled()
+  })
 })
 
 describe('HandleHumanTakeoverUseCase', () => {

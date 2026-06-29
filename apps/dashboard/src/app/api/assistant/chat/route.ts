@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body
     if (!body.confirmAction && !body.message?.trim()) {
-      return NextResponse.json({ error: 'message is required' }, { status: 400 })
+      return NextResponse.json({ phase: 'error', message: 'message is required' }, { status: 400 })
     }
 
     const result = await handleAssistantChat({
@@ -27,11 +27,18 @@ export async function POST(request: Request) {
       extraConfirm: body.extraConfirm,
     })
 
+    if (result.phase === 'error') {
+      return NextResponse.json(result, { status: 422 })
+    }
+
     return NextResponse.json(result)
   } catch (error) {
     const mapped = mapRepositoryError(error)
     if (mapped) return mapped
-    console.error('[assistant/chat]', error)
-    return NextResponse.json({ error: 'Assistant request failed' }, { status: 500 })
+    console.error('[assistant/chat]', error, {
+      hint: 'request failed',
+    })
+    const message = error instanceof Error ? error.message : 'Assistant request failed'
+    return NextResponse.json({ phase: 'error', message }, { status: 500 })
   }
 }

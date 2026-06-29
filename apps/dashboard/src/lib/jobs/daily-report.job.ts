@@ -57,10 +57,7 @@ export function createDailyReportServices(deps: {
   messageRepository: WhatsappMessageRepository
 }) {
   const reportRepository = new ConversationDailyReportPrismaRepository(prisma)
-  const recordTokenUsage = new RecordApiTokenUsageUseCase(
-    new ApiTokenUsagePrismaRepository(prisma),
-    config.openai,
-  )
+  const recordTokenUsage = new RecordApiTokenUsageUseCase(new ApiTokenUsagePrismaRepository(prisma))
 
   const reportProvider: {
     generate: (input: { chatId: string; reportDate: Date; transcript: string }) => Promise<{

@@ -80,7 +80,7 @@ export class ResolveAssistantTargetsUseCase {
       for (const query of target.nameQueries) {
         const scored = this.chats
           .map((chat) => ({ chat, score: scoreName(query, chat.name, chat.displayNumber) }))
-          .filter((entry) => entry.score >= 0.7)
+          .filter((entry) => entry.score >= 0.6)
           .sort((a, b) => b.score - a.score)
 
         if (scored.length === 0) {

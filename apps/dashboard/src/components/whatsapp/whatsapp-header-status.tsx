@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 type StatusPayload = {
@@ -46,6 +47,9 @@ export function WhatsappHeaderStatus() {
 
   return (
     <div className="flex flex-wrap items-center gap-4 text-sm">
+      <Link href="/dashboard/settings?tab=whatsapp" className="text-xs text-muted-foreground underline">
+        Configurações → WhatsApp
+      </Link>
       <span className={status.connected ? 'text-emerald-600' : 'text-red-600'}>
         Status: {status.connected ? 'Connected' : 'Disconnected'}
       </span>

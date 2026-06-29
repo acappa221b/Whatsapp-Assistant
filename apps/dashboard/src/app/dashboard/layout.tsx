@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <p className="text-sm text-muted-foreground">WhatsApp Assistant</p>
           <WhatsappHeaderStatus />
         </header>
-        <main className="min-h-0 flex-1 overflow-hidden px-6 py-4">{children}</main>
+        <main className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</main>
       </div>
     </div>
   )

@@ -1,20 +1,21 @@
-import { calculateTokenCostBrl, type OpenAIConfig } from '@finance-ai/shared/config'
+import { estimateTokenCostBrl } from '@finance-ai/shared'
 import type { ApiTokenUsageRepository, RecordApiTokenUsageInput } from '../domain/api-token-usage.types'
 
 export class RecordApiTokenUsageUseCase {
-  constructor(
-    private readonly repository: ApiTokenUsageRepository,
-    private readonly pricing: Pick<
-      OpenAIConfig,
-      'inputPricePer1mBrl' | 'outputPricePer1mBrl' | 'avgCostPer1kTokensBrl'
-    >,
-  ) {}
+  constructor(private readonly repository: ApiTokenUsageRepository) {}
 
   async execute(input: RecordApiTokenUsageInput) {
     const tokensInput = Math.max(0, input.tokensInput)
     const tokensOutput = Math.max(0, input.tokensOutput)
     const tokensTotal = tokensInput + tokensOutput
-    const costBrl = calculateTokenCostBrl(tokensInput, tokensOutput, this.pricing)
+    const costBrl = estimateTokenCostBrl({
+      provider: input.provider,
+      model: input.model,
+      tokensInput,
+      tokensOutput,
+      category: input.category,
+      audioDurationSec: input.audioDurationSec,
+    })
 
     return this.repository.record({
       ...input,

@@ -90,7 +90,8 @@ export function MessageArchiveView() {
         return
       }
       setChatsError(null)
-      setChats(data.items ?? [])
+      const items = [...(data.items ?? [])].sort((a, b) => a.displayNumber - b.displayNumber)
+      setChats(items)
     } catch (error) {
       setChatsError(error instanceof Error ? error.message : 'Erro de rede')
     } finally {
@@ -310,7 +311,7 @@ export function MessageArchiveView() {
                 disabled={!selectedChatId || !whatsappConnected || sending}
                 placeholder={
                   !whatsappConnected
-                    ? 'WhatsApp desconectado — conecte em WhatsApp'
+                    ? 'WhatsApp desconectado — conecte em Configurações → WhatsApp'
                     : 'Digite uma mensagem…'
                 }
                 className="max-h-24 min-h-[40px] flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm"

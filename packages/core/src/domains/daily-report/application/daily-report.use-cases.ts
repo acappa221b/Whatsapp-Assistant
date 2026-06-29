@@ -68,6 +68,7 @@ export class GenerateDailyChatReportUseCase {
       category: 'report_generation',
       chatId,
       model: this.model,
+      provider: 'openai',
       tokensInput: generated.tokensInput,
       tokensOutput: generated.tokensOutput,
       metadata: { reportDate: reportDate.toISOString().slice(0, 10) },

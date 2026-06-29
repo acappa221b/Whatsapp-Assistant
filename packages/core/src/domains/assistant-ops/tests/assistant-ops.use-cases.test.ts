@@ -8,7 +8,7 @@ describe('heuristicParse', () => {
     expect(cmd.action).toBe('send_message')
     if (cmd.action !== 'send_message') return
     expect(cmd.messageText?.toLowerCase()).toBe('oi')
-    expect(cmd.targets[0]).toEqual({ type: 'by_names', nameQueries: ['Maiara minha esposa'] })
+    expect(cmd.targets[0]).toEqual({ type: 'by_names', nameQueries: ['Maiara'] })
   })
 
   it('parses birthday invite broadcast', () => {
