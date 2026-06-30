@@ -1,5 +1,5 @@
 {
-  "version": "1.5.3-rc21",
+  "version": "1.6.0-rc22",
   "appName": "WhatsApp Assistant",
   "github": {
     "owner": "acappa221b",
@@ -7,5 +7,5 @@
     "branch": "main"
   },
   "releasedAt": "2026-06-30",
-  "releaseNotes": "Suporte a pastas de rede UNC no launcher Windows via pushd"
+  "releaseNotes": "Sync message-driven: sem grupos/agenda automaticos, prune orfaos, permissoes paginadas"
 }

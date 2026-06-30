@@ -54,8 +54,8 @@ export const Rc21Harness: Harness = {
     const manifest = JSON.parse(readFileSync(join(ROOT, 'version.json'), 'utf-8')) as {
       version: string
     }
-    if (manifest.version !== '1.5.3-rc21') {
-      errors.push(`version.json must be 1.5.3-rc21 (got ${manifest.version})`)
+    if (!manifest.version.startsWith('1.5.') && !manifest.version.startsWith('1.6.')) {
+      errors.push(`version.json must be 1.5.x or 1.6.x (got ${manifest.version})`)
     }
 
     const { isUncPath, resolveAppRoot } = await import('../../scripts/resolve-app-root.mjs')

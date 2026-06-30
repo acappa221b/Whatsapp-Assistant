@@ -23,6 +23,9 @@ type PatchBody = {
   whatsappAutoReconnect?: boolean
   whatsappReconnectDelayMs?: number
   whatsappIgnoreHistory?: boolean
+  syncGroupsEnabled?: boolean
+  syncAddressBookEnabled?: boolean
+  syncChatsMetadataEnabled?: boolean
   setupCompleted?: boolean
   reportAutoEnabled?: boolean
   reportAutoTime?: string

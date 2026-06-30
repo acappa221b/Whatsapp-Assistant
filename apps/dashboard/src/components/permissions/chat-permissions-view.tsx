@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Trash2, ChevronUp, ChevronDown, Minus } from 'lucide-react'
 import {
   cycleSortState,
-  filterChatsBySearch,
   formatChatListLabel,
   getChatTypeLabel,
   sortChats,
@@ -28,6 +27,9 @@ export type ChatPermissionRow = {
   agentPaused?: boolean
   updatedAt: string
 }
+
+type ChatTypeFilter = 'all' | 'group' | 'direct'
+type MessageFilter = 'with' | 'without' | 'all'
 
 function ariaSortValue(direction: SortState['direction']): 'ascending' | 'descending' | 'none' {
   if (direction === 'asc') return 'ascending'
@@ -66,32 +68,56 @@ function SortableHeader({
 
 export function ChatPermissionsView() {
   const [chats, setChats] = useState<ChatPermissionRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [updatingChatId, setUpdatingChatId] = useState<string | null>(null)
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
   const [resolvingNames, setResolvingNames] = useState(false)
+  const [pruning, setPruning] = useState(false)
+  const [prunePreview, setPrunePreview] = useState<{
+    total: number
+    groupCount: number
+  } | null>(null)
   const [sort, setSort] = useState<SortState>({ column: null, direction: null })
   const [search, setSearch] = useState('')
+  const [chatTypeFilter, setChatTypeFilter] = useState<ChatTypeFilter>('all')
+  const [messageFilter, setMessageFilter] = useState<MessageFilter>('with')
+  const limit = 50
 
   const loadChats = useCallback(async () => {
     setError(null)
     try {
-      const response = await fetch('/api/whatsapp/chats')
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      })
+      if (messageFilter === 'with') params.set('hasMessages', 'true')
+      else if (messageFilter === 'without') params.set('hasMessages', 'false')
+      else params.set('hasMessages', 'all')
+      if (chatTypeFilter !== 'all') params.set('chatType', chatTypeFilter)
+      if (search.trim()) params.set('search', search.trim())
+
+      const response = await fetch(`/api/whatsapp/chats?${params.toString()}`)
       if (!response.ok) {
         setError('Falha ao carregar chats')
         setLoading(false)
         return
       }
-      const data = (await response.json()) as { items: ChatPermissionRow[] }
+      const data = (await response.json()) as {
+        items: ChatPermissionRow[]
+        total: number
+      }
       setChats(data.items ?? [])
+      setTotal(data.total ?? 0)
     } catch {
       setError('Erro de rede ao carregar chats')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, chatTypeFilter, messageFilter, search])
 
   const resolveNames = useCallback(async (chatIds?: string[]) => {
     setResolvingNames(true)
@@ -112,6 +138,10 @@ export function ChatPermissionsView() {
   }, [loadChats])
 
   useEffect(() => {
+    setPage(1)
+  }, [chatTypeFilter, messageFilter, search])
+
+  useEffect(() => {
     let cancelled = false
     const boot = async () => {
       setLoading(true)
@@ -119,10 +149,19 @@ export function ChatPermissionsView() {
       if (!cancelled) await loadChats()
     }
     void boot()
-    const interval = setInterval(() => void loadChats(), 8000)
+
+    let interval = window.setInterval(() => void loadChats(), 8000)
+    const resetInterval = () => {
+      window.clearInterval(interval)
+      const ms = document.visibilityState === 'visible' ? 8000 : 16000
+      interval = window.setInterval(() => void loadChats(), ms)
+    }
+    document.addEventListener('visibilitychange', resetInterval)
+
     return () => {
       cancelled = true
-      clearInterval(interval)
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', resetInterval)
     }
   }, [loadChats, resolveNames])
 
@@ -134,13 +173,58 @@ export function ChatPermissionsView() {
     return undefined
   }, [chats, resolveNames, resolvingNames])
 
-  const visibleChats = useMemo(
-    () => sortChats(filterChatsBySearch(chats, search), sort),
-    [chats, search, sort],
-  )
+  const visibleChats = useMemo(() => sortChats(chats, sort), [chats, sort])
+  const totalPages = Math.max(1, Math.ceil(total / limit))
 
   function handleSort(column: SortColumn, isBoolean: boolean) {
     setSort((current) => cycleSortState(current, column, isBoolean))
+  }
+
+  async function previewPrune() {
+    setPruning(true)
+    setFeedback(null)
+    try {
+      const response = await fetch('/api/whatsapp/chats/prune-orphans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeGroups: true, dryRun: true }),
+      })
+      if (!response.ok) {
+        setError('Falha ao analisar chats orfaos')
+        return
+      }
+      const data = (await response.json()) as { total: number; groupCount: number }
+      setPrunePreview(data)
+    } finally {
+      setPruning(false)
+    }
+  }
+
+  async function confirmPrune() {
+    if (!prunePreview || prunePreview.total === 0) return
+    const confirmed = window.confirm(
+      `Serão removidos ${prunePreview.total} chats sem nenhuma mensagem (inclui ${prunePreview.groupCount} grupos). Continuar?`,
+    )
+    if (!confirmed) return
+
+    setPruning(true)
+    try {
+      const response = await fetch('/api/whatsapp/chats/prune-orphans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ includeGroups: true, dryRun: false }),
+      })
+      if (!response.ok) {
+        setError('Falha ao limpar chats orfaos')
+        return
+      }
+      const data = (await response.json()) as { removed: number }
+      setFeedback(`${data.removed} chats sem mensagem removidos.`)
+      setPrunePreview(null)
+      await loadChats()
+    } finally {
+      setPruning(false)
+    }
   }
 
   async function patchChat(
@@ -225,26 +309,78 @@ export function ChatPermissionsView() {
           <h1 className="text-2xl font-semibold">Permissões</h1>
           <p className="text-sm text-muted-foreground">
             Controle quais conversas aparecem em Mensagens, resposta IA, processamento de mídia e
-            relatórios diários.
+            relatórios diários. Chats aparecem aqui apos receber ou enviar mensagem.
           </p>
         </div>
-        <button
-          type="button"
-          disabled={resolvingNames}
-          onClick={() => void resolveNames()}
-          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${resolvingNames ? 'animate-spin' : ''}`} />
-          Atualizar nomes
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={pruning}
+            onClick={() => void previewPrune()}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
+          >
+            Limpar chats sem mensagem
+          </button>
+          <button
+            type="button"
+            disabled={resolvingNames}
+            onClick={() => void resolveNames()}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${resolvingNames ? 'animate-spin' : ''}`} />
+            Atualizar nomes
+          </button>
+        </div>
       </div>
 
-      <input
-        className="w-full max-w-md rounded-md border bg-background px-3 py-2 text-sm"
-        placeholder="Buscar por #N ou nome…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      {prunePreview && prunePreview.total > 0 ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Serão removidos {prunePreview.total} chats sem nenhuma mensagem (inclui{' '}
+          {prunePreview.groupCount} participantes/grupos).
+          <button
+            type="button"
+            className="ml-3 underline"
+            disabled={pruning}
+            onClick={() => void confirmPrune()}
+          >
+            Confirmar limpeza
+          </button>
+          <button
+            type="button"
+            className="ml-3 text-muted-foreground underline"
+            onClick={() => setPrunePreview(null)}
+          >
+            Cancelar
+          </button>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap gap-3">
+        <input
+          className="w-full max-w-md rounded-md border bg-background px-3 py-2 text-sm"
+          placeholder="Buscar por #N ou nome…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="rounded-md border bg-background px-3 py-2 text-sm"
+          value={chatTypeFilter}
+          onChange={(e) => setChatTypeFilter(e.target.value as ChatTypeFilter)}
+        >
+          <option value="all">Tipo: Todos</option>
+          <option value="direct">Diretos</option>
+          <option value="group">Grupos</option>
+        </select>
+        <select
+          className="rounded-md border bg-background px-3 py-2 text-sm"
+          value={messageFilter}
+          onChange={(e) => setMessageFilter(e.target.value as MessageFilter)}
+        >
+          <option value="with">Com mensagem</option>
+          <option value="without">Sem mensagem (admin)</option>
+          <option value="all">Todos</option>
+        </select>
+      </div>
 
       {feedback ? (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
@@ -258,119 +394,146 @@ export function ChatPermissionsView() {
         </div>
       ) : null}
 
-      {!loading && chats.length === 0 && !search.trim() ? (
+      {!loading && chats.length === 0 && !search.trim() && messageFilter === 'with' ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          Chats aparecem aqui quando uma mensagem nova chega ou quando o WhatsApp envia a lista de
-          conversas. Envie uma mensagem de teste apos conectar.
+          Chats aparecem aqui quando uma mensagem nova chega ou quando voce envia pelo dashboard.
+          A agenda e grupos nao sao sincronizados automaticamente.
         </div>
       ) : null}
 
       {loading && chats.length === 0 ? (
         <p className="text-sm">Carregando e resolvendo nomes…</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr>
-                <SortableHeader label="Chat/Grupo" column="name" sort={sort} isBoolean={false} onSort={handleSort} />
-                <SortableHeader label="Habilitado" column="archiveEnabled" sort={sort} isBoolean onSort={handleSort} />
-                <SortableHeader label="Resposta IA" column="agentChatEnabled" sort={sort} isBoolean onSort={handleSort} />
-                <SortableHeader label="Áudio" column="audioProcessingEnabled" sort={sort} isBoolean onSort={handleSort} />
-                <SortableHeader label="Foto" column="photoProcessingEnabled" sort={sort} isBoolean onSort={handleSort} />
-                <SortableHeader label="Relatório" column="reportGenerationEnabled" sort={sort} isBoolean onSort={handleSort} />
-                <th className="px-4 py-3">Histórico</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleChats.map((chat) => {
-                const label = formatChatListLabel(chat.displayNumber, chat.name)
-                const typeLabel = getChatTypeLabel(chat.chatId)
-                const busy = updatingChatId === chat.chatId || deletingChatId === chat.chatId
-                const featureDisabled = !chat.archiveEnabled || busy
-                return (
-                  <tr key={chat.chatId} className="border-t">
-                    <td className="px-4 py-3">
-                      <div className="font-medium">
-                        {!chat.nameResolved && chat.name?.trim() ? (
-                          <span className="text-amber-600">⚠️ {label}</span>
-                        ) : (
-                          label
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{typeLabel}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ToggleSwitch
-                        checked={chat.archiveEnabled}
-                        disabled={busy}
-                        label={`Habilitar ${label} em Mensagens`}
-                        onChange={(next) => void patchChat(chat.chatId, { archiveEnabled: next })}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <ToggleSwitch
-                        checked={chat.agentChatEnabled}
-                        disabled={featureDisabled}
-                        label={`Resposta IA para ${label}`}
-                        onChange={(next) =>
-                          void patchChat(chat.chatId, { agentChatEnabled: next })
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <ToggleSwitch
-                        checked={chat.audioProcessingEnabled}
-                        disabled={featureDisabled}
-                        label={`Áudio para ${label}`}
-                        onChange={(next) =>
-                          void patchChat(chat.chatId, { audioProcessingEnabled: next })
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <ToggleSwitch
-                        checked={chat.photoProcessingEnabled}
-                        disabled={featureDisabled}
-                        label={`Foto para ${label}`}
-                        onChange={(next) =>
-                          void patchChat(chat.chatId, { photoProcessingEnabled: next })
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <ToggleSwitch
-                        checked={chat.reportGenerationEnabled}
-                        disabled={featureDisabled}
-                        label={`Relatório para ${label}`}
-                        onChange={(next) =>
-                          void patchChat(chat.chatId, { reportGenerationEnabled: next })
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        aria-label="Apagar histórico"
-                        disabled={busy}
-                        onClick={() => void deleteHistory(chat.chatId, label)}
-                        className="rounded-md border p-2 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+        <>
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/50 text-left">
+                <tr>
+                  <SortableHeader label="Chat/Grupo" column="name" sort={sort} isBoolean={false} onSort={handleSort} />
+                  <SortableHeader label="Habilitado" column="archiveEnabled" sort={sort} isBoolean onSort={handleSort} />
+                  <SortableHeader label="Resposta IA" column="agentChatEnabled" sort={sort} isBoolean onSort={handleSort} />
+                  <SortableHeader label="Áudio" column="audioProcessingEnabled" sort={sort} isBoolean onSort={handleSort} />
+                  <SortableHeader label="Foto" column="photoProcessingEnabled" sort={sort} isBoolean onSort={handleSort} />
+                  <SortableHeader label="Relatório" column="reportGenerationEnabled" sort={sort} isBoolean onSort={handleSort} />
+                  <th className="px-4 py-3">Histórico</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleChats.map((chat) => {
+                  const label = formatChatListLabel(chat.displayNumber, chat.name)
+                  const typeLabel = getChatTypeLabel(chat.chatId)
+                  const busy = updatingChatId === chat.chatId || deletingChatId === chat.chatId
+                  const featureDisabled = !chat.archiveEnabled || busy
+                  return (
+                    <tr key={chat.chatId} className="border-t">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">
+                          {!chat.nameResolved && chat.name?.trim() ? (
+                            <span className="text-amber-600">⚠️ {label}</span>
+                          ) : (
+                            label
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{typeLabel}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ToggleSwitch
+                          checked={chat.archiveEnabled}
+                          disabled={busy}
+                          label={`Habilitar ${label} em Mensagens`}
+                          onChange={(next) => void patchChat(chat.chatId, { archiveEnabled: next })}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <ToggleSwitch
+                          checked={chat.agentChatEnabled}
+                          disabled={featureDisabled}
+                          label={`Resposta IA para ${label}`}
+                          onChange={(next) =>
+                            void patchChat(chat.chatId, { agentChatEnabled: next })
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <ToggleSwitch
+                          checked={chat.audioProcessingEnabled}
+                          disabled={featureDisabled}
+                          label={`Áudio para ${label}`}
+                          onChange={(next) =>
+                            void patchChat(chat.chatId, { audioProcessingEnabled: next })
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <ToggleSwitch
+                          checked={chat.photoProcessingEnabled}
+                          disabled={featureDisabled}
+                          label={`Foto para ${label}`}
+                          onChange={(next) =>
+                            void patchChat(chat.chatId, { photoProcessingEnabled: next })
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <ToggleSwitch
+                          checked={chat.reportGenerationEnabled}
+                          disabled={featureDisabled}
+                          label={`Relatório para ${label}`}
+                          onChange={(next) =>
+                            void patchChat(chat.chatId, { reportGenerationEnabled: next })
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          aria-label="Apagar histórico"
+                          disabled={busy}
+                          onClick={() => void deleteHistory(chat.chatId, label)}
+                          className="rounded-md border p-2 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {visibleChats.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                      {search.trim()
+                        ? 'Nenhum chat corresponde à busca.'
+                        : 'Nenhum chat reconhecido ainda. Envie uma mensagem no WhatsApp conectado.'}
                     </td>
                   </tr>
-                )
-              })}
-              {visibleChats.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                    {search.trim() ? 'Nenhum chat corresponde à busca.' : 'Nenhum chat reconhecido ainda. Envie uma mensagem no WhatsApp conectado.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              {total} chat(s) — pagina {page} de {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                className="rounded-md border px-3 py-1 disabled:opacity-50"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                className="rounded-md border px-3 py-1 disabled:opacity-50"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                Proxima
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

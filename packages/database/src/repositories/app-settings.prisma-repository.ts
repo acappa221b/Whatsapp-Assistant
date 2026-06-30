@@ -12,6 +12,9 @@ export type AppSettingsRecord = {
   whatsappAutoReconnect: boolean
   whatsappReconnectDelayMs: number
   whatsappIgnoreHistory: boolean
+  syncGroupsEnabled: boolean
+  syncAddressBookEnabled: boolean
+  syncChatsMetadataEnabled: boolean
   settingsEncryptionSecret: string | null
   encryptionSecretGenerated: boolean
   setupCompleted: boolean
@@ -41,6 +44,9 @@ export type UpdateAppSettingsInput = Partial<
     | 'whatsappAutoReconnect'
     | 'whatsappReconnectDelayMs'
     | 'whatsappIgnoreHistory'
+    | 'syncGroupsEnabled'
+    | 'syncAddressBookEnabled'
+    | 'syncChatsMetadataEnabled'
     | 'setupCompleted'
     | 'reportAutoEnabled'
     | 'reportAutoTime'
@@ -92,6 +98,9 @@ export class AppSettingsPrismaRepository {
     whatsappAutoReconnect: boolean
     whatsappReconnectDelayMs: number
     whatsappIgnoreHistory: boolean
+    syncGroupsEnabled: boolean
+    syncAddressBookEnabled: boolean
+    syncChatsMetadataEnabled: boolean
     settingsEncryptionSecret: string | null
     encryptionSecretGenerated: boolean
     setupCompleted: boolean

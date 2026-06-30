@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.5.3-rc21  
-**Fase:** RC-21 suporte UNC no launcher Windows  
+**Versão:** 1.6.0-rc22  
+**Fase:** RC-22A sync message-driven (sem grupos/agenda automaticos)  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -221,11 +221,19 @@ A versão instalada aparece no topo do dashboard. Novas versões geram um banner
 3. Clique **Exportar .txt** e envie o arquivo para quem está te ajudando
 4. Logs do `Start WhatsApp Assistant.bat` aparecem com etiqueta **launcher**
 
+### Sync de chats (RC-22A)
+
+Por padrão, **grupos e agenda não sincronizam** automaticamente. Chats entram em Permissões quando há mensagem recebida ou enviada.
+
+- **Configurações → WhatsApp → Sincronização** — toggles para reativar sync legado
+- **Permissões → Limpar chats sem mensagem** — remove centenas de entradas órfãs de sync antigo
+- Filtro **Com mensagem** (default) oculta configs sem histórico
+
 ---
 
 ## Próximo passo
 
-**RC-21** corrigiu execução do launcher a partir de pastas de rede UNC no Windows (`pushd` + `WA_APP_ROOT`).
+**RC-22A** mudou a política de sync: chats aparecem em Permissões **somente após mensagem** (grupos e agenda desligados por padrão). Use **Limpar chats sem mensagem** para remover entradas antigas.
 
 ---
 
@@ -242,6 +250,7 @@ A versão instalada aparece no topo do dashboard. Novas versões geram um banner
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.6.0-rc22 | RC-22A: sync message-driven, sem grupos/agenda auto, prune orfaos, permissoes paginadas |
 | 1.5.3-rc21 | RC-21: suporte UNC no launcher Windows (pushd, WA_APP_ROOT, shell fix pnpm) |
 | 1.5.2-rc20 | RC-20: aba Logs em Configurações, logging centralizado, export .txt, filtro erros, launcher merge |
 | 1.5.1-rc19 | RC-19: bolha [Áudio] com transcrição, feedback salvamento API keys, edição PATCH provedores |

@@ -276,6 +276,9 @@ model AppSettings {
   whatsappAutoReconnect            Boolean  @default(true)
   whatsappReconnectDelayMs         Int      @default(5000)
   whatsappIgnoreHistory            Boolean  @default(true)
+  syncGroupsEnabled                Boolean  @default(false)
+  syncAddressBookEnabled           Boolean  @default(false)
+  syncChatsMetadataEnabled         Boolean  @default(false)
   settingsEncryptionSecret         String?
   encryptionSecretGenerated        Boolean  @default(false)
   setupCompleted                   Boolean  @default(false)

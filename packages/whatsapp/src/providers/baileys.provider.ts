@@ -15,6 +15,7 @@ import { logRc07 } from '@finance-ai/shared/utils'
 import { getSharedAppLogger } from '@finance-ai/shared/logging'
 import { recordMessageReceived } from '../metrics/capture-metrics'
 import { logIncomingMessageDiscovery } from '../utils/group-discovery'
+import type { WhatsappDiscoveryPolicy } from '@finance-ai/shared'
 import {
   logRc02MessageUpsertStart,
   resolveChatType,
@@ -62,6 +63,7 @@ export type BaileysSocketFactory = (options: {
   onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
   contactNameResolver?: ContactNameResolver
   importHistoryEnabled?: boolean
+  discoveryPolicy?: WhatsappDiscoveryPolicy
 }) => Promise<BaileysSocketEvents>
 
 export type BaileysWhatsappProviderOptions = {
@@ -73,6 +75,8 @@ export type BaileysWhatsappProviderOptions = {
   onConnectionOpen?: () => void | Promise<void>
   contactNameResolver?: ContactNameResolver
   getImportHistoryEnabled?: () => boolean | Promise<boolean>
+  shouldEnrichGroupMetadata?: (chatId: string) => boolean | Promise<boolean>
+  getDiscoveryPolicy?: () => WhatsappDiscoveryPolicy | Promise<WhatsappDiscoveryPolicy>
 }
 
 const defaultStatus = (): WhatsappStatus => ({
@@ -104,6 +108,8 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
   private readonly onConnectionOpen?: () => void | Promise<void>
   private readonly contactNameResolver: ContactNameResolver
   private readonly getImportHistoryEnabled?: () => boolean | Promise<boolean>
+  private readonly shouldEnrichGroupMetadata?: (chatId: string) => boolean | Promise<boolean>
+  private readonly getDiscoveryPolicy?: () => WhatsappDiscoveryPolicy | Promise<WhatsappDiscoveryPolicy>
 
   constructor(options: BaileysWhatsappProviderOptions = {}) {
     this.authDir = options.authDir ?? config.whatsapp.sessionPath
@@ -114,6 +120,8 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     this.onConnectionOpen = options.onConnectionOpen
     this.contactNameResolver = options.contactNameResolver ?? new ContactNameResolver()
     this.getImportHistoryEnabled = options.getImportHistoryEnabled
+    this.shouldEnrichGroupMetadata = options.shouldEnrichGroupMetadata
+    this.getDiscoveryPolicy = options.getDiscoveryPolicy
   }
 
   async connect(): Promise<void> {
@@ -221,6 +229,9 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
       importHistoryEnabled: this.getImportHistoryEnabled
         ? await Promise.resolve(this.getImportHistoryEnabled())
         : false,
+      discoveryPolicy: this.getDiscoveryPolicy
+        ? await Promise.resolve(this.getDiscoveryPolicy())
+        : undefined,
     })
     this.currentSocketInstanceId = socketInstanceId
   }
@@ -437,7 +448,12 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
         fromMe: mapped.fromMe,
       })
       if (mapped.chatId.endsWith('@g.us') && !mapped.chatName) {
-        this.contactNameResolver.enrichGroupMetadataAsync(mapped.chatId)
+        const enrich = this.shouldEnrichGroupMetadata
+          ? await Promise.resolve(this.shouldEnrichGroupMetadata(mapped.chatId))
+          : true
+        if (enrich) {
+          this.contactNameResolver.enrichGroupMetadataAsync(mapped.chatId)
+        }
       }
       recordMessageReceived(mapped.messageType)
 

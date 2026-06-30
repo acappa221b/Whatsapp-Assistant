@@ -40,6 +40,8 @@ import {
 import {
   EnsureWhatsappChatDiscoveredUseCase,
   ListWhatsappChatConfigsUseCase,
+  ListWhatsappChatConfigsPaginatedUseCase,
+  PruneOrphanChatConfigsUseCase,
   ResolveChatNamesUseCase,
   UpdateWhatsappChatConfigUseCase,
 } from '@finance-ai/core/domains/whatsapp-chat-config'
@@ -69,6 +71,8 @@ import {
 } from './runtime-integrity'
 import { buildArchiveHealthSnapshot } from '@finance-ai/core/domains/message-archive'
 import { bootstrapWhatsappNames } from './name-bootstrap'
+import { loadWhatsappDiscoveryPolicy } from './discovery-policy'
+import type { WhatsappDiscoveryPolicy } from '@finance-ai/shared'
 import { repairHistoricalMessages } from './repair-historical-messages'
 import { deleteStoredMediaFile, createChatMediaCleanup } from '@/lib/media-storage'
 import { createChatNameResolverPort } from './chat-name-resolution.adapter'
@@ -98,6 +102,8 @@ type WhatsappRuntime = {
   ensureChatDiscoveredUseCase: EnsureWhatsappChatDiscoveredUseCase
   backfillNamesUseCase: BackfillWhatsappMessageNamesUseCase
   listChatConfigsUseCase: ListWhatsappChatConfigsUseCase
+  listChatConfigsPaginatedUseCase: ListWhatsappChatConfigsPaginatedUseCase
+  pruneOrphanChatConfigsUseCase: PruneOrphanChatConfigsUseCase
   updateChatConfigUseCase: UpdateWhatsappChatConfigUseCase
   deleteChatHistoryUseCase: DeleteChatHistoryUseCase
   resolveChatNamesUseCase: ResolveChatNamesUseCase
@@ -168,6 +174,37 @@ function createRuntime(): WhatsappRuntime {
   const ensureChatDiscoveredUseCase = new EnsureWhatsappChatDiscoveredUseCase(chatConfigRepository)
   const backfillNamesUseCase = new BackfillWhatsappMessageNamesUseCase(messageRepository)
   const configNameCache = new Map<string, string>()
+  let discoveryPolicy: WhatsappDiscoveryPolicy = {
+    syncGroupsEnabled: false,
+    syncAddressBookEnabled: false,
+    syncChatsMetadataEnabled: false,
+  }
+  const chatsWithMessages = new Set<string>()
+
+  const refreshDiscoveryPolicy = async () => {
+    discoveryPolicy = await loadWhatsappDiscoveryPolicy(prisma)
+  }
+
+  const refreshChatsWithMessages = async () => {
+    const rows = await prisma.whatsappMessage.findMany({
+      distinct: ['chatId'],
+      select: { chatId: true },
+    })
+    chatsWithMessages.clear()
+    for (const row of rows) chatsWithMessages.add(row.chatId)
+  }
+
+  const shouldDiscoverChatConfig = async (chatId: string): Promise<boolean> => {
+    const existing = await chatConfigRepository.findByChatId(chatId)
+    if (existing) return true
+    if (chatsWithMessages.has(chatId)) return true
+    if (await chatConfigRepository.hasMessages(chatId)) {
+      chatsWithMessages.add(chatId)
+      return true
+    }
+    if (chatId.endsWith('@g.us')) return discoveryPolicy.syncGroupsEnabled
+    return discoveryPolicy.syncChatsMetadataEnabled
+  }
 
   const refreshConfigNameCache = async () => {
     const configs = await chatConfigRepository.findAll()
@@ -183,6 +220,7 @@ function createRuntime(): WhatsappRuntime {
     onGroupNameResolved: async (chatId, name) => {
       recordOperationalEvent('groups.metadata')
       configNameCache.set(chatId, name)
+      if (!(await shouldDiscoverChatConfig(chatId))) return
       await ensureChatDiscoveredUseCase.execute(chatId, name)
       await backfillNamesUseCase.execute({ chatId, chatName: name })
     },
@@ -191,11 +229,12 @@ function createRuntime(): WhatsappRuntime {
   const handleNameDiscovered = async (chatId: string, name?: string | null) => {
     recordOperationalEvent('chats.upsert')
     const trimmed = name?.trim()
+    if (trimmed) configNameCache.set(chatId, trimmed)
+    if (!(await shouldDiscoverChatConfig(chatId))) return
     if (!trimmed) {
       await ensureChatDiscoveredUseCase.execute(chatId)
       return
     }
-    configNameCache.set(chatId, trimmed)
     await ensureChatDiscoveredUseCase.execute(chatId, trimmed)
     await backfillNamesUseCase.execute({ chatId, chatName: trimmed })
   }
@@ -205,8 +244,6 @@ function createRuntime(): WhatsappRuntime {
     await backfillNamesUseCase.execute({ senderId: jid, senderName: name })
     if (!jid.endsWith('@g.us')) {
       configNameCache.set(jid, name)
-      await ensureChatDiscoveredUseCase.execute(jid, name)
-      await backfillNamesUseCase.execute({ chatId: jid, chatName: name })
     }
   }
 
@@ -222,6 +259,8 @@ function createRuntime(): WhatsappRuntime {
     if (nameBootstrapDone) return
     nameBootstrapDone = true
     contactNameResolver.setOwnJid(getOwnJidFromAuthSession(config.whatsapp.sessionPath))
+    await refreshDiscoveryPolicy()
+    await refreshChatsWithMessages()
     await refreshConfigNameCache()
     await bootstrapWhatsappNames({
       prisma,
@@ -230,6 +269,7 @@ function createRuntime(): WhatsappRuntime {
       backfillNames: backfillNamesUseCase,
       resolveChatNames: resolveChatNamesUseCase,
       chatMediaStorage,
+      discoveryPolicy,
     })
     const ownJid = getOwnJidFromAuthSession(config.whatsapp.sessionPath)
     const repair = await repairHistoricalMessages({
@@ -251,6 +291,13 @@ function createRuntime(): WhatsappRuntime {
       const settings = await prisma.appSettings.findUnique({ where: { id: 'default' } })
       return settings ? !settings.whatsappIgnoreHistory : false
     },
+    getDiscoveryPolicy: async () => loadWhatsappDiscoveryPolicy(prisma),
+    shouldEnrichGroupMetadata: async (chatId) => {
+      await refreshDiscoveryPolicy()
+      if (discoveryPolicy.syncGroupsEnabled) return true
+      const configRow = await chatConfigRepository.findByChatId(chatId)
+      return configRow?.archiveEnabled ?? false
+    },
   })
 
   const storeUseCase = new StoreWhatsappMessageUseCase(messageRepository, eventBus)
@@ -260,6 +307,10 @@ function createRuntime(): WhatsappRuntime {
   const fidelityUseCase = new GetMessageFidelityMetricsUseCase(messageRepository)
   const markProcessedUseCase = new MarkWhatsappMessageProcessedUseCase(messageRepository, eventBus)
   const listChatConfigsUseCase = new ListWhatsappChatConfigsUseCase(chatConfigRepository)
+  const listChatConfigsPaginatedUseCase = new ListWhatsappChatConfigsPaginatedUseCase(
+    chatConfigRepository,
+  )
+  const pruneOrphanChatConfigsUseCase = new PruneOrphanChatConfigsUseCase(chatConfigRepository)
   const updateChatConfigUseCase = new UpdateWhatsappChatConfigUseCase(chatConfigRepository)
   const deleteChatHistoryUseCase = new DeleteChatHistoryUseCase(
     messageRepository,
@@ -281,6 +332,8 @@ function createRuntime(): WhatsappRuntime {
     ensureChatDiscoveredUseCase,
     backfillNamesUseCase,
     listChatConfigsUseCase,
+    listChatConfigsPaginatedUseCase,
+    pruneOrphanChatConfigsUseCase,
     updateChatConfigUseCase,
     deleteChatHistoryUseCase,
     resolveChatNamesUseCase,

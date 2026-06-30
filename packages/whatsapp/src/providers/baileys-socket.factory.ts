@@ -15,7 +15,8 @@ import { attachContactDiscoveryListeners } from '../utils/contact-discovery'
 import type { ContactNameResolver } from '../utils/contact-name-resolver'
 import { ContactNameResolver as ContactNameResolverClass } from '../utils/contact-name-resolver'
 import { shouldProcessMessageUpsert } from '../utils/baileys-upsert-policy'
-import { syncHistoryChats } from '../utils/history-sync'
+import { syncHistoryChats, syncHistoryChatsFromMessages, collectMessageChatIds } from '../utils/history-sync'
+import type { WhatsappDiscoveryPolicy } from '@finance-ai/shared'
 import { logRc02BaileysEvent, logRc02WhatsappEventReceived } from '../utils/rc-02-diagnostic'
 
 type ConnectionUpdate = BaileysConnectionUpdate
@@ -107,6 +108,7 @@ export async function createDefaultBaileysSocket(options: {
   onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
   contactNameResolver?: ContactNameResolver
   importHistoryEnabled?: boolean
+  discoveryPolicy?: WhatsappDiscoveryPolicy
 }): Promise<BaileysSocketEvents> {
   const importHistoryEnabled = options.importHistoryEnabled ?? false
   const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers } =
@@ -196,7 +198,14 @@ export async function createDefaultBaileysSocket(options: {
     })
 
     void (async () => {
-      const discovered = await syncHistoryChats(data.chats, options.onChatDiscovered)
+      const messageChatIds = collectMessageChatIds(data.messages)
+      const discovered = options.discoveryPolicy?.syncChatsMetadataEnabled
+        ? await syncHistoryChats(data.chats, options.onChatDiscovered, { enabled: true })
+        : await syncHistoryChatsFromMessages(
+            data.chats,
+            messageChatIds,
+            options.onChatDiscovered,
+          )
       if (discovered > 0) {
         console.info('[RC-16/chat-sync]', {
           at: new Date().toISOString(),
@@ -228,10 +237,12 @@ export async function createDefaultBaileysSocket(options: {
   attachGroupDiscoveryListeners(socket, {
     onChatDiscovered: options.onChatDiscovered,
     resolver,
+    discoveryPolicy: options.discoveryPolicy,
   })
   attachContactDiscoveryListeners(socket, {
     resolver,
     onContactDiscovered: options.onContactDiscovered,
+    syncAddressBookEnabled: options.discoveryPolicy?.syncAddressBookEnabled ?? false,
   })
 
   return socket

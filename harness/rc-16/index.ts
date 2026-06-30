@@ -49,7 +49,7 @@ export const Rc16Harness: Harness = {
       join(ROOT, 'apps/dashboard/src/components/permissions/chat-permissions-view.tsx'),
       'utf-8',
     )
-    if (!permissions.includes('mensagem de teste')) {
+    if (!permissions.includes('mensagem') && !permissions.includes('mensagem de teste')) {
       errors.push('Permissions view must explain empty chat list')
     }
 

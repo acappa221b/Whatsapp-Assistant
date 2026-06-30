@@ -16,6 +16,8 @@ describe('runtime-integrity (RC-05)', () => {
       ensureChatDiscoveredUseCase: {},
       backfillNamesUseCase: {},
       listChatConfigsUseCase: {},
+      listChatConfigsPaginatedUseCase: {},
+      pruneOrphanChatConfigsUseCase: {},
       updateChatConfigUseCase: {},
       deleteChatHistoryUseCase: {},
       resolveChatNamesUseCase: {},

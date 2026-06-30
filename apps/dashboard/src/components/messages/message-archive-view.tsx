@@ -153,8 +153,19 @@ export function MessageArchiveView() {
     if (!selectedChatId) return
     stickToBottomRef.current = true
     void loadMessages(selectedChatId)
-    const interval = setInterval(() => void loadMessages(selectedChatId), 5000)
-    return () => clearInterval(interval)
+    let interval = window.setInterval(() => void loadMessages(selectedChatId), 5000)
+
+    const resetInterval = () => {
+      window.clearInterval(interval)
+      const ms = document.visibilityState === 'visible' ? 5000 : 8000
+      interval = window.setInterval(() => void loadMessages(selectedChatId), ms)
+    }
+
+    document.addEventListener('visibilitychange', resetInterval)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', resetInterval)
+    }
   }, [selectedChatId, loadMessages])
 
   useEffect(() => {

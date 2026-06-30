@@ -1,14 +1,15 @@
+/** RC-07/RC-09/RC-22A — bootstrap names after stable connection (message-driven). */
 import type { PrismaClient } from '@finance-ai/database'
-import { isGenericDisplayName } from '@finance-ai/shared/utils'
-import { ChatMediaStorage } from '@finance-ai/shared/storage'
 import type { ContactNameResolver } from '@finance-ai/whatsapp'
 import type { BackfillWhatsappMessageNamesUseCase } from '@finance-ai/core/domains/whatsapp-message'
 import type {
   EnsureWhatsappChatDiscoveredUseCase,
   ResolveChatNamesUseCase,
 } from '@finance-ai/core/domains/whatsapp-chat-config'
+import type { WhatsappDiscoveryPolicy } from '@finance-ai/shared'
+import { ChatMediaStorage } from '@finance-ai/shared/storage'
+import { isGenericDisplayName } from '@finance-ai/shared/utils'
 
-/** RC-07/RC-09 — bootstrap names + resolve all chats after stable connection. */
 export async function bootstrapWhatsappNames(input: {
   prisma: PrismaClient
   resolver: ContactNameResolver
@@ -16,6 +17,7 @@ export async function bootstrapWhatsappNames(input: {
   backfillNames: BackfillWhatsappMessageNamesUseCase
   resolveChatNames: ResolveChatNamesUseCase
   chatMediaStorage?: ChatMediaStorage
+  discoveryPolicy?: WhatsappDiscoveryPolicy
 }): Promise<{
   groupsResolved: number
   rawPayloadUpdated: number
@@ -23,14 +25,15 @@ export async function bootstrapWhatsappNames(input: {
   namesFailed: number
 }> {
   const chatMediaStorage = input.chatMediaStorage ?? new ChatMediaStorage()
-  const groupChatIds = await input.prisma.whatsappMessage.findMany({
-    where: { chatId: { endsWith: '@g.us' } },
-    distinct: ['chatId'],
+  const policy = input.discoveryPolicy
+
+  const enabledGroupConfigs = await input.prisma.whatsappChatConfig.findMany({
+    where: { chatId: { endsWith: '@g.us' }, archiveEnabled: true },
     select: { chatId: true },
   })
 
   let groupsResolved = 0
-  for (const row of groupChatIds) {
+  for (const row of enabledGroupConfigs) {
     const result = await input.resolver.fetchGroupMetadataSync(row.chatId, 10_000)
     if (result.name) {
       groupsResolved += 1
@@ -44,10 +47,20 @@ export async function bootstrapWhatsappNames(input: {
     select: { chatId: true },
   })
   for (const { chatId } of distinctChatIds) {
-    await input.ensureChatDiscovered.execute(chatId)
+    const existing = await input.prisma.whatsappChatConfig.findUnique({
+      where: { chatId },
+      select: { chatId: true },
+    })
+    if (!existing) {
+      await input.ensureChatDiscovered.execute(chatId)
+    }
   }
 
+  const configChatIds = await input.prisma.whatsappChatConfig.findMany({
+    select: { chatId: true },
+  })
   const resolveResult = await input.resolveChatNames.execute({
+    chatIds: configChatIds.map((row) => row.chatId),
     onNameResolved: async (chatId, name) => {
       await input.backfillNames.execute({ chatId, chatName: name })
     },
@@ -57,8 +70,9 @@ export async function bootstrapWhatsappNames(input: {
 
   const rawPayloadUpdated = await backfillNamesFromRawPayload(input.prisma)
 
-  console.info('[RC-09/name-bootstrap]', {
+  console.info('[RC-22A/name-bootstrap]', {
     groupsResolved,
+    syncGroupsEnabled: policy?.syncGroupsEnabled ?? false,
     namesResolved: resolveResult.resolved,
     namesFailed: resolveResult.failed.length,
     rawPayloadUpdated,

@@ -44,6 +44,9 @@ type AppSettings = {
   whatsappAutoReconnect: boolean
   whatsappReconnectDelayMs: number
   whatsappIgnoreHistory: boolean
+  syncGroupsEnabled: boolean
+  syncAddressBookEnabled: boolean
+  syncChatsMetadataEnabled: boolean
   setupCompleted: boolean
   defaultChatProviderId: string | null
   defaultTranscriptionProviderId: string | null
@@ -332,6 +335,54 @@ function SettingsPageContent() {
                       <span className="mt-1 block text-xs text-muted-foreground">
                         Pode demorar e consumir mais dados na primeira conexao. Desligado por
                         padrao: apenas mensagens novas entram no app.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.syncGroupsEnabled}
+                      onChange={(e) =>
+                        void patchSettings({ syncGroupsEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      Sincronizar grupos automaticamente
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Desligado por padrao. Grupos so aparecem em Permissoes apos receber
+                        mensagem no grupo ou habilitar manualmente.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.syncAddressBookEnabled}
+                      onChange={(e) =>
+                        void patchSettings({ syncAddressBookEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      Sincronizar agenda de contatos
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Desligado por padrao. Contatos da agenda nao populam Permissoes sem
+                        mensagem.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={settings.syncChatsMetadataEnabled}
+                      onChange={(e) =>
+                        void patchSettings({ syncChatsMetadataEnabled: e.target.checked })
+                      }
+                    />
+                    <span>
+                      Sincronizar lista de conversas do WhatsApp
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Desligado por padrao. Chats descobertos somente por mensagens recebidas ou
+                        enviadas.
                       </span>
                     </span>
                   </label>

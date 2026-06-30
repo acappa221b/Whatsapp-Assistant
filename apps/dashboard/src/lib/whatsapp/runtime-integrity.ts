@@ -1,5 +1,5 @@
 /** Bump when WhatsappRuntime shape changes — invalidates stale global singleton. */
-export const WHATSAPP_RUNTIME_VERSION = 9
+export const WHATSAPP_RUNTIME_VERSION = 10
 
 export type RuntimeHealth = {
   valid: boolean
@@ -20,6 +20,8 @@ export type RuntimeIntegrityTarget = {
   ensureChatDiscoveredUseCase: unknown
   backfillNamesUseCase: unknown
   listChatConfigsUseCase: unknown
+  listChatConfigsPaginatedUseCase: unknown
+  pruneOrphanChatConfigsUseCase: unknown
   updateChatConfigUseCase: unknown
   deleteChatHistoryUseCase: unknown
   resolveChatNamesUseCase: unknown
@@ -40,6 +42,8 @@ const REQUIRED_KEYS: (keyof RuntimeIntegrityTarget)[] = [
   'ensureChatDiscoveredUseCase',
   'backfillNamesUseCase',
   'listChatConfigsUseCase',
+  'listChatConfigsPaginatedUseCase',
+  'pruneOrphanChatConfigsUseCase',
   'updateChatConfigUseCase',
   'deleteChatHistoryUseCase',
   'resolveChatNamesUseCase',

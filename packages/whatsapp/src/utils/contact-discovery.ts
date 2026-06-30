@@ -13,6 +13,7 @@ function persistContact(
   contacts: BaileysContact[],
   resolver: ContactNameResolver,
   onContactDiscovered?: (jid: string, name: string) => void | Promise<void>,
+  syncAddressBookEnabled = false,
 ): void {
   for (const contact of contacts) {
     const jid = contact.id?.trim()
@@ -24,7 +25,7 @@ function persistContact(
       count: 1,
       items: [{ chatId: jid, chatType: 'contact', name: name ?? null }],
     })
-    if (name && onContactDiscovered) {
+    if (syncAddressBookEnabled && name && onContactDiscovered) {
       void onContactDiscovered(jid, name)
     }
   }
@@ -38,18 +39,31 @@ export function attachContactDiscoveryListeners(
   options: {
     resolver: ContactNameResolver
     onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
+    syncAddressBookEnabled?: boolean
   },
 ): void {
-  const { resolver, onContactDiscovered } = options
+  const { resolver, onContactDiscovered, syncAddressBookEnabled = false } = options
 
   socket.ev.on('contacts.upsert', (payload: unknown) => {
     if (!Array.isArray(payload)) return
-    persistContact('contacts.upsert', payload as BaileysContact[], resolver, onContactDiscovered)
+    persistContact(
+      'contacts.upsert',
+      payload as BaileysContact[],
+      resolver,
+      onContactDiscovered,
+      syncAddressBookEnabled,
+    )
   })
 
   socket.ev.on('contacts.update', (payload: unknown) => {
     if (!Array.isArray(payload)) return
-    persistContact('contacts.update', payload as BaileysContact[], resolver, onContactDiscovered)
+    persistContact(
+      'contacts.update',
+      payload as BaileysContact[],
+      resolver,
+      onContactDiscovered,
+      syncAddressBookEnabled,
+    )
   })
 }
 

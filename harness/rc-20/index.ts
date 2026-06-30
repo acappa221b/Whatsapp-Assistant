@@ -40,7 +40,7 @@ export const Rc20Harness: Harness = {
     const manifest = JSON.parse(readFileSync(join(ROOT, 'version.json'), 'utf-8')) as {
       version: string
     }
-    if (!manifest.version.includes('rc20') && !manifest.version.startsWith('1.5.')) {
+    if (!manifest.version.includes('rc20') && !manifest.version.startsWith('1.5.') && !manifest.version.startsWith('1.6.')) {
       errors.push('version.json should reflect RC-20 or newer')
     }
 

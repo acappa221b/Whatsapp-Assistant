@@ -2,6 +2,7 @@ import type { RawBaileysMessage } from './baileys-message.util'
 import { logRc02BaileysEvent } from './rc-02-diagnostic'
 import type { ContactNameResolver } from './contact-name-resolver'
 import { feedNamedChatToResolver } from './contact-discovery'
+import type { WhatsappDiscoveryPolicy } from '@finance-ai/shared'
 
 const GROUP_DISCOVERY_TARGET = 'Financeiro UNIQUE'
 
@@ -27,11 +28,21 @@ function logNamedGroupMatch(source: string, name: string | undefined, id: string
   console.log(`[WhatsApp/Group-Discovery] ${source} — Grupo encontrado:`, name, 'ID:', id)
 }
 
+function shouldDiscoverChat(
+  chatId: string,
+  policy: WhatsappDiscoveryPolicy | undefined,
+): boolean {
+  if (!policy) return true
+  if (chatId.endsWith('@g.us')) return policy.syncGroupsEnabled
+  return policy.syncChatsMetadataEnabled
+}
+
 async function persistNamedChat(
   source: string,
   chat: NamedChat,
   onChatDiscovered?: (chatId: string, name?: string | null) => void | Promise<void>,
   resolver?: ContactNameResolver,
+  policy?: WhatsappDiscoveryPolicy,
 ): Promise<void> {
   const chatId = chat.id?.trim()
   if (!chatId) return
@@ -49,6 +60,7 @@ async function persistNamedChat(
     ],
   })
   logNamedGroupMatch(source, name ?? undefined, chatId)
+  if (!shouldDiscoverChat(chatId, policy)) return
   if (onChatDiscovered) {
     await onChatDiscovered(chatId, name)
   }
@@ -62,21 +74,22 @@ export function attachGroupDiscoveryListeners(
   options: {
     onChatDiscovered?: (chatId: string, name?: string | null) => void | Promise<void>
     resolver?: ContactNameResolver
+    discoveryPolicy?: WhatsappDiscoveryPolicy
   } = {},
 ): void {
-  const { onChatDiscovered, resolver } = options
+  const { onChatDiscovered, resolver, discoveryPolicy } = options
 
   socket.ev.on('groups.update', (updates: unknown) => {
     if (!Array.isArray(updates)) return
     for (const group of updates as NamedChat[]) {
-      void persistNamedChat('groups.update', group, onChatDiscovered, resolver)
+      void persistNamedChat('groups.update', group, onChatDiscovered, resolver, discoveryPolicy)
     }
   })
 
   socket.ev.on('groups.upsert', (groups: unknown) => {
     if (!Array.isArray(groups)) return
     for (const group of groups as NamedChat[]) {
-      void persistNamedChat('groups.upsert', group, onChatDiscovered, resolver)
+      void persistNamedChat('groups.upsert', group, onChatDiscovered, resolver, discoveryPolicy)
     }
   })
 
@@ -86,14 +99,16 @@ export function attachGroupDiscoveryListeners(
       : (payload as { chats?: unknown[] } | undefined)?.chats
     if (!Array.isArray(chats)) return
     for (const chat of chats as NamedChat[]) {
-      void persistNamedChat('chats.upsert', chat, onChatDiscovered, resolver)
+      void persistNamedChat('chats.upsert', chat, onChatDiscovered, resolver, discoveryPolicy)
     }
   })
 
   socket.ev.on('chats.update', (updates: unknown) => {
     if (!Array.isArray(updates)) return
     for (const chat of updates as NamedChat[]) {
-      void persistNamedChat('chats.update', chat, onChatDiscovered, resolver)
+      void persistNamedChat('chats.update', chat, onChatDiscovered, resolver, discoveryPolicy)
     }
   })
 }
+
+export { shouldDiscoverChat }
