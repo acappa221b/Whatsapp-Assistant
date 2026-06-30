@@ -295,6 +295,9 @@ model AppSettings {
   updateCheckEnabled               Boolean  @default(true)
   lastUpdateCheckAt                DateTime?
   dismissedUpdateVersion           String?
+  lastSuccessfulUpdateAt           DateTime?
+  lastUpdateVersion                String?
+  updateChannel                    String   @default("main")
   updatedAt                        DateTime @updatedAt
 }
 

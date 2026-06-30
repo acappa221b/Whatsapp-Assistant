@@ -8,12 +8,15 @@ export type AppVersionResponse = {
   updateAvailable: boolean
   latestVersion: string | null
   releaseNotes: string | null
-  updateMethod: 'restart_launcher' | 'manual_download'
+  updateMethod: 'restart_launcher' | 'zip_overlay' | 'manual_download'
   downloadUrl: string | null
   checkedAt: string
   checkError?: string
   bannerDismissed: boolean
   hasGitRepo: boolean
+  canAutoUpdateOnRestart: boolean
+  lastLocalUpdateAt: string | null
+  lastLocalUpdateMethod: 'git' | 'zip' | null
   github?: { owner: string; repo: string; branch?: string }
 }
 

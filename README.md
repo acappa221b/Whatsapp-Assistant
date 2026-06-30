@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.6.0-rc22  
-**Fase:** RC-22A sync message-driven (sem grupos/agenda automaticos)  
+**Versão:** 1.6.1-rc18b  
+**Fase:** RC-18B auto-update Git + ZIP no launcher  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -208,11 +208,34 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Como atualizar
 
-Se você clonou do GitHub com Git instalado, **feche o programa e abra de novo** `Start WhatsApp Assistant.bat` — o launcher faz `git pull` automaticamente.
+Atualizar e facil: **feche o programa e abra de novo** `Start WhatsApp Assistant.bat`.
 
-Se baixou ZIP, baixe a nova versão no [GitHub](https://github.com/acappa221b/Whatsapp-Assistant/releases) e copie por cima (mantenha a pasta `storage/`).
+Se houver versao nova, o programa pergunta se quer atualizar. Seus chats e configuracoes **nao sao apagados**.
 
-A versão instalada aparece no topo do dashboard. Novas versões geram um banner com instruções.
+| Como instalou | O que acontece |
+|---------------|----------------|
+| ZIP do GitHub | Baixa e aplica automaticamente (overlay) |
+| Clone Git | `git pull` automatico |
+| Sem internet | Abre na versao atual |
+
+### Dados preservados
+
+- `storage/` (WhatsApp, midias)
+- Banco de dados local (configuracoes, mensagens, API keys)
+- `tools/node/` (Node portatil)
+- `logs/`
+
+### Modo profissional
+
+| Variavel | Efeito |
+|----------|--------|
+| `WA_SKIP_UPDATE=1` | Pular checagem |
+| `WA_UPDATE_SILENT=1` | Atualizar sem perguntar |
+| `WA_UPDATE_AUTO=1` | Assumir sim no prompt |
+
+Logs: `logs/launcher.log`, `logs/update.log`
+
+A versao instalada aparece em **Configuracoes → Geral → Sobre** e no topo do dashboard. Novas versoes geram um banner com instrucoes.
 
 ### Ver logs e pedir ajuda (RC-20)
 
@@ -233,7 +256,7 @@ Por padrão, **grupos e agenda não sincronizam** automaticamente. Chats entram 
 
 ## Próximo passo
 
-**RC-22A** mudou a política de sync: chats aparecem em Permissões **somente após mensagem** (grupos e agenda desligados por padrão). Use **Limpar chats sem mensagem** para remover entradas antigas.
+**RC-18B** completa a atualizacao automatica para instalacoes ZIP e Git no launcher. Feche e reabra o `.bat` para receber novas versoes.
 
 ---
 
@@ -250,6 +273,7 @@ Por padrão, **grupos e agenda não sincronizam** automaticamente. Chats entram 
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.6.1-rc18b | RC-18B: auto-update ZIP overlay + Git no launcher, dados preservados, banner/Sobre |
 | 1.6.0-rc22 | RC-22A: sync message-driven, sem grupos/agenda auto, prune orfaos, permissoes paginadas |
 | 1.5.3-rc21 | RC-21: suporte UNC no launcher Windows (pushd, WA_APP_ROOT, shell fix pnpm) |
 | 1.5.2-rc20 | RC-20: aba Logs em Configurações, logging centralizado, export .txt, filtro erros, launcher merge |

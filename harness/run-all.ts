@@ -92,6 +92,7 @@ import { Rc15Harnesses } from './rc-15'
 import { Rc16Harnesses } from './rc-16'
 import { Rc17Harnesses } from './rc-17'
 import { Rc18Harnesses } from './rc-18'
+import { Rc18bHarnesses } from './rc-18b'
 import { Rc19Harnesses } from './rc-19'
 import { Rc20Harnesses } from './rc-20'
 import { Rc21Harnesses } from './rc-21'
@@ -185,6 +186,7 @@ const harnesses = [
   ...Rc16Harnesses,
   ...Rc17Harnesses,
   ...Rc18Harnesses,
+  ...Rc18bHarnesses,
   ...Rc19Harnesses,
   ...Rc20Harnesses,
   ...Rc21Harnesses,

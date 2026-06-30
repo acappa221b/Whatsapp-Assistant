@@ -56,6 +56,7 @@ type AppSettings = {
   reportAutoEnabled: boolean
   reportAutoTime: string
   reportTimezone: string
+  updateCheckEnabled: boolean
 }
 
 export default function SettingsPage() {
@@ -257,7 +258,12 @@ function SettingsPageContent() {
               <CardTitle className="text-base">Sobre</CardTitle>
             </CardHeader>
             <CardContent>
-              <SettingsAboutSection />
+              <SettingsAboutSection
+                updateCheckEnabled={settings.updateCheckEnabled}
+                onUpdateCheckEnabledChange={(enabled) =>
+                  void patchSettings({ updateCheckEnabled: enabled })
+                }
+              />
             </CardContent>
           </Card>
           </>

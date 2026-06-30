@@ -69,8 +69,8 @@ export const Rc22aHarness: Harness = {
     const manifest = JSON.parse(readFileSync(join(ROOT, 'version.json'), 'utf-8')) as {
       version: string
     }
-    if (manifest.version !== '1.6.0-rc22') {
-      errors.push(`version.json must be 1.6.0-rc22 (got ${manifest.version})`)
+    if (!manifest.version.startsWith('1.6.')) {
+      errors.push(`version.json must be 1.6.x (got ${manifest.version})`)
     }
 
     return createResult(this.name, errors)

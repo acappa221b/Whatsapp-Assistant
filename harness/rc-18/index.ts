@@ -36,13 +36,18 @@ export const Rc18Harness: Harness = {
     }
 
     const launch = readFileSync(join(ROOT, 'scripts/launch.mjs'), 'utf-8')
-    if (!launch.includes('auto-update') || !launch.includes('autoUpdate')) {
-      errors.push('launch.mjs must call autoUpdate')
+    if (!launch.includes('runAutoUpdate')) {
+      errors.push('launch.mjs must call runAutoUpdate')
     }
 
     const autoUpdate = readFileSync(join(ROOT, 'scripts/auto-update.mjs'), 'utf-8')
-    if (!autoUpdate.includes('git pull --ff-only')) {
-      errors.push('auto-update must use git pull --ff-only')
+    if (!autoUpdate.includes('runAutoUpdate')) {
+      errors.push('auto-update.mjs must delegate to runAutoUpdate')
+    }
+
+    const gitUpdate = readFileSync(join(ROOT, 'scripts/update/update-via-git.mjs'), 'utf-8')
+    if (!gitUpdate.includes('git pull --ff-only')) {
+      errors.push('update-via-git must use git pull --ff-only')
     }
 
     const sidebar = readFileSync(join(ROOT, 'apps/dashboard/src/components/layout/app-sidebar.tsx'), 'utf-8')

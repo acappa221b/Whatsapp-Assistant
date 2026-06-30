@@ -45,6 +45,11 @@ export function UpdateAvailableBanner() {
       ? `https://github.com/${data.github.owner}/${data.github.repo}/releases/tag/v${data.latestVersion}`
       : data.downloadUrl
 
+  const restartMessage =
+    data.updateMethod === 'manual_download'
+      ? 'Nao foi possivel verificar atualizacoes. Verifique sua internet ou copie o programa para disco local (C:\\Users...).'
+      : 'Feche o programa e abra de novo Start WhatsApp Assistant.bat — a atualizacao e automatica. Seus dados em storage/ e o banco sao preservados.'
+
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-6 py-3 text-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -52,17 +57,7 @@ export function UpdateAvailableBanner() {
           <p className="font-medium text-amber-900 dark:text-amber-100">
             Nova versao {data.latestVersion} disponivel
           </p>
-          {data.updateMethod === 'restart_launcher' ? (
-            <p className="text-muted-foreground">
-              Feche esta janela e abra novamente <strong>Start WhatsApp Assistant.bat</strong> para
-              atualizar automaticamente.
-            </p>
-          ) : (
-            <p className="text-muted-foreground">
-              Baixe a versao mais recente no GitHub e substitua a pasta. Seus dados em{' '}
-              <code className="text-xs">storage/</code> e o banco sao preservados.
-            </p>
-          )}
+          <p className="text-muted-foreground">{restartMessage}</p>
           {data.releaseNotes ? (
             <p className="text-xs text-muted-foreground">{data.releaseNotes}</p>
           ) : null}
@@ -85,7 +80,7 @@ export function UpdateAvailableBanner() {
               rel="noreferrer"
               className="inline-flex h-8 items-center rounded-md border px-3 text-xs"
             >
-              Baixar no GitHub
+              GitHub releases
             </a>
           ) : null}
           <Button type="button" size="sm" onClick={() => void dismiss()}>

@@ -1,14 +1,19 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  compareVersions,
   readAppVersionManifest,
   type AppVersionManifest,
 } from '@finance-ai/shared/version'
+import {
+  isUpdateAvailable,
+  rawVersionUrl,
+  releasesPageUrl,
+} from '@finance-ai/shared/update'
 import { REPO_ROOT } from '@finance-ai/shared/config'
 import { settingsRepo } from '@/lib/ai/ai-provider-service'
+import { readLocalUpdateState } from './read-update-state'
 
-export type UpdateMethod = 'restart_launcher' | 'manual_download'
+export type UpdateMethod = 'restart_launcher' | 'zip_overlay' | 'manual_download'
 
 export type VersionCheckResult = {
   version: string
@@ -23,6 +28,9 @@ export type VersionCheckResult = {
   checkError?: string
   bannerDismissed: boolean
   hasGitRepo: boolean
+  canAutoUpdateOnRestart: boolean
+  lastLocalUpdateAt: string | null
+  lastLocalUpdateMethod: 'git' | 'zip' | null
 }
 
 type RemoteCache = {
@@ -38,17 +46,10 @@ function hasGitRepo(): boolean {
   return existsSync(join(REPO_ROOT, '.git'))
 }
 
-function githubRawUrl(manifest: AppVersionManifest): string | null {
-  const github = manifest.github
-  if (!github?.owner || !github?.repo) return null
-  const branch = github.branch ?? 'main'
-  return `https://raw.githubusercontent.com/${github.owner}/${github.repo}/${branch}/version.json`
-}
-
-function releasesUrl(manifest: AppVersionManifest): string | null {
-  const github = manifest.github
-  if (!github?.owner || !github?.repo) return null
-  return `https://github.com/${github.owner}/${github.repo}/releases`
+function resolveUpdateMethod(checkError?: string): UpdateMethod {
+  if (checkError) return 'manual_download'
+  if (hasGitRepo()) return 'restart_launcher'
+  return 'zip_overlay'
 }
 
 async function fetchRemoteManifest(
@@ -60,11 +61,14 @@ async function fetchRemoteManifest(
     return { remote: remoteCache.manifest, error: remoteCache.error }
   }
 
-  const url = githubRawUrl(local)
-  if (!url) {
+  const github = local.github
+  if (!github?.owner || !github?.repo) {
     remoteCache = { fetchedAt: now, manifest: null, error: 'no-github-config' }
     return { remote: null, error: 'no-github-config' }
   }
+
+  const branch = github.branch ?? 'main'
+  const url = rawVersionUrl(github.owner, github.repo, branch)
 
   try {
     const response = await fetch(url, {
@@ -88,6 +92,8 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
   const local = readAppVersionManifest()
   const settings = await settingsRepo.get()
   const checkedAt = new Date()
+  const localUpdate = readLocalUpdateState()
+  const gitRepo = hasGitRepo()
 
   if (!settings.updateCheckEnabled && !options?.force) {
     return {
@@ -97,18 +103,24 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
       updateAvailable: false,
       latestVersion: null,
       releaseNotes: null,
-      updateMethod: hasGitRepo() ? 'restart_launcher' : 'manual_download',
-      downloadUrl: releasesUrl(local),
+      updateMethod: gitRepo ? 'restart_launcher' : 'zip_overlay',
+      downloadUrl:
+        local.github?.owner && local.github?.repo
+          ? releasesPageUrl(local.github.owner, local.github.repo)
+          : null,
       checkedAt: checkedAt.toISOString(),
       bannerDismissed: false,
-      hasGitRepo: hasGitRepo(),
+      hasGitRepo: gitRepo,
+      canAutoUpdateOnRestart: !gitRepo || gitRepo,
+      lastLocalUpdateAt: localUpdate?.updatedAt ?? settings.lastSuccessfulUpdateAt?.toISOString() ?? null,
+      lastLocalUpdateMethod: localUpdate?.method ?? null,
     }
   }
 
   const { remote, error } = await fetchRemoteManifest(local, Boolean(options?.force))
   const latestVersion = remote?.version ?? null
   const updateAvailable =
-    latestVersion !== null && compareVersions(latestVersion, local.version) > 0
+    latestVersion !== null && isUpdateAvailable(local.version, latestVersion)
 
   if (options?.force || updateAvailable || error) {
     await settingsRepo.update({ lastUpdateCheckAt: checkedAt })
@@ -119,6 +131,9 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
     settings.dismissedUpdateVersion === latestVersion &&
     updateAvailable
 
+  const updateMethod = resolveUpdateMethod(error)
+  const canAutoUpdateOnRestart = !error && updateMethod !== 'manual_download'
+
   return {
     version: local.version,
     appName: local.appName,
@@ -126,12 +141,15 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
     updateAvailable,
     latestVersion,
     releaseNotes: remote?.releaseNotes ?? null,
-    updateMethod: hasGitRepo() ? 'restart_launcher' : 'manual_download',
-    downloadUrl: releasesUrl(local),
+    updateMethod,
+    downloadUrl: local.github ? releasesPageUrl(local.github.owner, local.github.repo) : null,
     checkedAt: checkedAt.toISOString(),
     checkError: error,
     bannerDismissed,
-    hasGitRepo: hasGitRepo(),
+    hasGitRepo: gitRepo,
+    canAutoUpdateOnRestart,
+    lastLocalUpdateAt: localUpdate?.updatedAt ?? settings.lastSuccessfulUpdateAt?.toISOString() ?? null,
+    lastLocalUpdateMethod: localUpdate?.method ?? null,
   }
 }
 

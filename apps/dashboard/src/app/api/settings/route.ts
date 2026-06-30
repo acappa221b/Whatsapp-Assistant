@@ -35,6 +35,7 @@ type PatchBody = {
   defaultVisionProviderId?: string | null
   defaultReportProviderId?: string | null
   defaultAssistantProviderId?: string | null
+  updateCheckEnabled?: boolean
 }
 
 export async function PATCH(request: Request) {

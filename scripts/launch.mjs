@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { createWriteStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
-import { autoUpdate } from './auto-update.mjs'
+import { runAutoUpdate } from './update/index.mjs'
 import {
   needsPrismaGenerate,
   runDbGenerateSafe,
@@ -155,7 +155,13 @@ async function main() {
   }
   checkNode()
 
-  const updateResult = await autoUpdate()
+  const updateResult = await runAutoUpdate(ROOT, {
+    skip: process.env.WA_SKIP_UPDATE === '1',
+    silent: process.env.WA_UPDATE_SILENT === '1',
+    assumeYes: process.env.WA_UPDATE_AUTO === '1',
+    interactive: process.stdout.isTTY,
+    log,
+  })
   if (updateResult.updated) {
     await new Promise((r) => setTimeout(r, 2000))
   }

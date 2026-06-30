@@ -31,6 +31,9 @@ export type AppSettingsRecord = {
   updateCheckEnabled: boolean
   lastUpdateCheckAt: Date | null
   dismissedUpdateVersion: string | null
+  lastSuccessfulUpdateAt: Date | null
+  lastUpdateVersion: string | null
+  updateChannel: string
   updatedAt: Date
 }
 
@@ -60,6 +63,9 @@ export type UpdateAppSettingsInput = Partial<
     | 'updateCheckEnabled'
     | 'lastUpdateCheckAt'
     | 'dismissedUpdateVersion'
+    | 'lastSuccessfulUpdateAt'
+    | 'lastUpdateVersion'
+    | 'updateChannel'
   >
 >
 
@@ -117,6 +123,9 @@ export class AppSettingsPrismaRepository {
     updateCheckEnabled: boolean
     lastUpdateCheckAt: Date | null
     dismissedUpdateVersion: string | null
+    lastSuccessfulUpdateAt: Date | null
+    lastUpdateVersion: string | null
+    updateChannel: string
     updatedAt: Date
   }): AppSettingsRecord {
     return { ...row }

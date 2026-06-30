@@ -1,5 +1,5 @@
 {
-  "version": "1.6.0-rc22",
+  "version": "1.6.1-rc18b",
   "appName": "WhatsApp Assistant",
   "github": {
     "owner": "acappa221b",
@@ -7,5 +7,6 @@
     "branch": "main"
   },
   "releasedAt": "2026-06-30",
-  "releaseNotes": "Sync message-driven: sem grupos/agenda automaticos, prune orfaos, permissoes paginadas"
+  "releaseNotes": "Atualizacao automatica ZIP + Git no launcher; dados em storage/ e banco preservados",
+  "minLauncherVersion": 1
 }

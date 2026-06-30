@@ -16,7 +16,8 @@
     "./contracts": "./src/contracts/index.ts",
     "./ai-training": "./src/ai-training/index.ts",
     "./version": "./src/version/index.ts",
-    "./logging": "./src/logging/index.ts"
+    "./logging": "./src/logging/index.ts",
+    "./update": "./src/update/index.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
