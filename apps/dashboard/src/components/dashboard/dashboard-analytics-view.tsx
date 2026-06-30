@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -10,24 +10,40 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { DashboardMetrics, CostCategoryFilter } from '@finance-ai/core/domains/dashboard-analytics'
+import type {
+  DailySeriesPoint,
+  DashboardMetrics,
+  CostCategoryFilter,
+} from '@finance-ai/core/domains/dashboard-analytics'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MonthPicker, currentMonthSelection, type MonthSelection } from './month-picker'
+
+function formatBrl4(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  })
+}
 
 function DailyBarChart({
   title,
   data,
   valueLabel,
   color = 'hsl(var(--neon-orange))',
+  showCostInTooltip = false,
 }: {
   title: string
-  data: Array<{ date: string; count: number }>
+  data: DailySeriesPoint[]
   valueLabel: string
   color?: string
+  showCostInTooltip?: boolean
 }) {
   const chartData = data.map((point) => ({
     day: point.date.slice(8),
     count: point.count,
+    costBrl: point.costBrl,
   }))
 
   return (
@@ -41,7 +57,26 @@ function DailyBarChart({
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis dataKey="day" tick={{ fontSize: 11 }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={32} />
-            <Tooltip formatter={(value: number) => [value, valueLabel]} />
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.[0]) return null
+                const point = payload[0].payload as {
+                  count: number
+                  costBrl?: number
+                }
+                return (
+                  <div className="rounded-md border bg-popover px-3 py-2 text-xs shadow">
+                    <p className="font-medium">Dia {label}</p>
+                    <p>
+                      {valueLabel}: {point.count.toLocaleString('pt-BR')}
+                    </p>
+                    {showCostInTooltip && point.costBrl != null ? (
+                      <p>Custo: {formatBrl4(point.costBrl)}</p>
+                    ) : null}
+                  </div>
+                )
+              }}
+            />
             <Bar dataKey="count" fill={color} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -86,10 +121,11 @@ export function DashboardAnalyticsView() {
     void loadMetrics(month)
   }, [loadMetrics, month])
 
-  const costDataForChart =
-    costFilter === 'total'
-      ? metrics?.costs.costBrl ?? []
-      : metrics?.costs.costByCategory[costFilter as Exclude<CostCategoryFilter, 'total'>] ?? []
+  const costDataForChart = useMemo(() => {
+    if (!metrics) return []
+    if (costFilter === 'total') return metrics.costs.costBrl
+    return metrics.costs.costByCategory[costFilter]
+  }, [costFilter, metrics])
 
   const monthCostTotal =
     metrics?.costs.costBrl.reduce((sum, point) => sum + point.count, 0) ?? 0
@@ -155,26 +191,37 @@ export function DashboardAnalyticsView() {
                 data={metrics.costs.tokenUsage}
                 valueLabel="tokens"
                 color="hsl(var(--neon-orange))"
+                showCostInTooltip
               />
               <DailyBarChart
                 title="Tokens — Mensagens"
                 data={metrics.costs.tokensByCategory.agent_message}
                 valueLabel="tokens"
+                showCostInTooltip
               />
               <DailyBarChart
                 title="Tokens — Fotos"
                 data={metrics.costs.tokensByCategory.photo_processing}
                 valueLabel="tokens"
+                showCostInTooltip
               />
               <DailyBarChart
                 title="Tokens — Áudios"
                 data={metrics.costs.tokensByCategory.audio_processing}
                 valueLabel="tokens"
+                showCostInTooltip
               />
               <DailyBarChart
                 title="Tokens — Relatórios"
                 data={metrics.costs.tokensByCategory.report_generation}
                 valueLabel="tokens"
+                showCostInTooltip
+              />
+              <DailyBarChart
+                title="Tokens — Chat IA"
+                data={metrics.costs.tokensByCategory.assistant_chat}
+                valueLabel="tokens"
+                showCostInTooltip
               />
             </div>
 
@@ -193,6 +240,7 @@ export function DashboardAnalyticsView() {
                 <option value="photo_processing">Fotos</option>
                 <option value="audio_processing">Áudios</option>
                 <option value="report_generation">Relatórios</option>
+                <option value="assistant_chat">Chat IA</option>
               </select>
             </div>
 
@@ -203,13 +251,14 @@ export function DashboardAnalyticsView() {
               color="hsl(var(--neon-pink))"
             />
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {(
                 [
                   ['Mensagem', metrics.costs.averageCostBrl.agent_message],
                   ['Áudio', metrics.costs.averageCostBrl.audio_processing],
                   ['Foto', metrics.costs.averageCostBrl.photo_processing],
                   ['Relatório', metrics.costs.averageCostBrl.report_generation],
+                  ['Chat IA', metrics.costs.averageCostBrl.assistant_chat],
                 ] as const
               ).map(([label, value]) => (
                 <Card key={label} className="border-border/60 bg-card/60">

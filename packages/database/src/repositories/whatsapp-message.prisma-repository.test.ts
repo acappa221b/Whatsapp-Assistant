@@ -175,4 +175,61 @@ describe('WhatsappMessagePrismaRepository (unit)', () => {
     expect(summaries).toHaveLength(1)
     expect(summaries[0]?.chatId).toBe('enabled@g.us')
   })
+
+  it('listChatSummaries returns chats ordered by lastMessageAt desc', async () => {
+    vi.mocked(prisma.whatsappMessage.groupBy).mockResolvedValue([
+      {
+        chatId: 'older@g.us',
+        _count: { _all: 1 },
+        _max: { receivedAt: new Date('2025-06-01T10:00:00Z') },
+      },
+      {
+        chatId: 'newer@g.us',
+        _count: { _all: 3 },
+        _max: { receivedAt: new Date('2025-06-01T14:00:00Z') },
+      },
+    ] as never)
+    vi.mocked(prisma.whatsappChatConfig.findMany).mockResolvedValue([
+      {
+        chatId: 'older@g.us',
+        displayNumber: 1,
+        name: 'Older',
+        archiveEnabled: true,
+        audioProcessingEnabled: false,
+        updatedAt: now,
+      },
+      {
+        chatId: 'newer@g.us',
+        displayNumber: 2,
+        name: 'Newer',
+        archiveEnabled: true,
+        audioProcessingEnabled: false,
+        updatedAt: now,
+      },
+    ] as never)
+    vi.mocked(prisma.whatsappMessage.findFirst).mockImplementation(async (args) => {
+      const chatId = (args as { where?: { chatId?: string } }).where?.chatId
+      if (chatId === 'newer@g.us') {
+        return {
+          content: 'recent',
+          messageType: 'TEXT',
+          receivedAt: new Date('2025-06-01T14:00:00Z'),
+          fromMe: false,
+          chatName: 'Newer',
+          senderName: null,
+        } as never
+      }
+      return {
+        content: 'old',
+        messageType: 'TEXT',
+        receivedAt: new Date('2025-06-01T10:00:00Z'),
+        fromMe: false,
+        chatName: 'Older',
+        senderName: null,
+      } as never
+    })
+
+    const summaries = await repository.listChatSummaries()
+    expect(summaries.map((entry) => entry.chatId)).toEqual(['newer@g.us', 'older@g.us'])
+  })
 })

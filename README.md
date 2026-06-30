@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.6.2-rc24  
-**Fase:** RC-24 fix parse versão (rc18b) + banner update  
+**Versão:** 1.7.0-rc25  
+**Fase:** RC-25 chat sort, dashboard IA costs, audio gate, multi-message  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -43,6 +43,7 @@ Assistente de memória conversacional via WhatsApp — captura, organização, i
 | `/dashboard/assistant` | **Chat IA** (relatórios + ações) |
 | `/dashboard` | Sumário |
 | `/dashboard/messages` | Mensagens (somente chats com `archiveEnabled`) |
+| `/dashboard/multi-mensagem` | **Multi Mensagem** (envio em massa para chats habilitados) |
 | `/dashboard/reports` | Relatórios diários |
 | `/dashboard/settings` | **Configurações** (geral, provedores IA, **IA**, WhatsApp, relatórios, **Logs**) |
 
@@ -74,7 +75,7 @@ Validação: `pnpm validate:repo-hygiene` (também roda no CI).
 |--------|-------|----------------|
 | **Habilitado** | `archiveEnabled` | Chat visível em Mensagens |
 | **Resposta IA** | `agentChatEnabled` | Agent TEXT + áudio/imagem pós-processamento |
-| **Áudio** | `audioProcessingEnabled` | Transcrição Whisper → `[ÁUDIO]` no content |
+| **Áudio** | `audioProcessingEnabled` | Transcrição Whisper → `[ÁUDIO]` no content; bolha só após transcrição (RC-25) |
 | **Foto** | `photoProcessingEnabled` | Vision + agent com contexto `[FOTO]` |
 | **Relatório** | `reportGenerationEnabled` | Geração manual/auto de relatórios |
 | **#N** | `displayNumber` | ID estável do chat em Permissões e Mensagens |
@@ -256,19 +257,28 @@ Por padrão, **grupos e agenda não sincronizam** automaticamente. Chats entram 
 - **Permissões → Limpar chats sem mensagem** — remove centenas de entradas órfãs de sync antigo
 - Filtro **Com mensagem** (default) oculta configs sem histórico
 
-### Transcrição de áudio (RC-23)
+### Transcrição de áudio (RC-23 / RC-25)
 
 Requer **OpenAI Whisper** — em **Configurações → Provedores IA → Provedor por função → Transcrição áudio**, selecione um provedor OpenAI (Gemini não transcreve áudio).
 
 - Áudios novos são transcritos automaticamente quando **Áudio** está habilitado em Permissões
+- **RC-25:** com Áudio habilitado, o áudio só aparece no chat após a transcrição (OpenAI Whisper)
 - Se falhar, a bolha mostra erro amigável e **Tentar novamente**
 - Ao habilitar Áudio em um chat, áudios recentes pendentes são reprocessados
+
+### Mensagens (RC-25)
+
+A lista de chats segue a ordem da última mensagem (mais recente no topo), como no WhatsApp.
+
+### Multi Mensagem (RC-25)
+
+Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo de ~2s entre envios para segurança (máx. 50 chats).
 
 ---
 
 ## Próximo passo
 
-**RC-24** corrige comparacao de versao com sufixo alfabético (`-rc18b`) — sem banner falso quando o GitHub esta desatualizado.
+**RC-25** entrega ordenação de chats, custos Chat IA no dashboard, gate de áudio Whisper e envio Multi Mensagem.
 
 ---
 
@@ -285,6 +295,7 @@ Requer **OpenAI Whisper** — em **Configurações → Provedores IA → Provedo
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.0-rc25 | RC-25: sort chats por recência, tooltip custo tokens, custos Chat IA, gate áudio Whisper, Multi Mensagem |
 | 1.6.2-rc24 | RC-24: parse versao rc18b, fim banner falso de update, cache localVersion |
 | 1.6.1-rc23 | RC-23: transcrição áudio Whisper-only, retry/backfill, UI erro/retry |
 | 1.6.1-rc18b | RC-18B: auto-update ZIP overlay + Git no launcher, dados preservados, banner/Sobre |

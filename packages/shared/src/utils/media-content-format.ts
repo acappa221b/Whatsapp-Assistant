@@ -1,4 +1,5 @@
 export const AUDIO_CONTENT_PREFIX = '[ÁUDIO]'
+export const AUDIO_PENDING_CONTENT = '[AUDIO_PENDING]'
 export const AUDIO_TRANSCRIPTION_FAILED_PREFIX = '[ÁUDIO_ERRO]'
 export const PHOTO_CONTENT_PREFIX = '[FOTO]'
 export const AUDIO_DISPLAY_LABEL = '[Áudio]'
@@ -64,13 +65,28 @@ export function parseAudioMessageContent(content: string | null | undefined): Pa
   }
 }
 
+export function isAudioPendingGate(content: string): boolean {
+  return content.trim() === AUDIO_PENDING_CONTENT
+}
+
 export function isAudioTranscriptionFailed(content: string): boolean {
   return content.trim().toLowerCase().startsWith(AUDIO_TRANSCRIPTION_FAILED_PREFIX.toLowerCase())
 }
 
 export function isPendingAudioTranscription(content: string): boolean {
   if (isAudioTranscriptionFailed(content)) return false
+  if (isAudioPendingGate(content)) return true
   return !parseAudioMessageContent(content).isTranscribed
+}
+
+export function shouldHideInboundAudioUntilTranscribed(
+  content: string,
+  messageType: string,
+  audioProcessingEnabled: boolean,
+): boolean {
+  if (messageType !== 'AUDIO' || !audioProcessingEnabled) return false
+  if (isAudioTranscriptionFailed(content)) return false
+  return isPendingAudioTranscription(content)
 }
 
 export function getAudioTranscriptionStatus(
@@ -79,6 +95,7 @@ export function getAudioTranscriptionStatus(
 ): AudioTranscriptionStatus {
   if (messageType !== 'AUDIO') return 'none'
   if (isAudioTranscriptionFailed(content)) return 'failed'
+  if (isAudioPendingGate(content)) return 'pending'
   if (parseAudioMessageContent(content).isTranscribed) return 'done'
   return 'pending'
 }

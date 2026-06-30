@@ -106,6 +106,10 @@ export async function hasAiProvider(capability: AiCapability): Promise<boolean> 
   return Boolean(await resolveCredentials(capability))
 }
 
+export async function getAssistantProviderCredentials(): Promise<ProviderCredentials | null> {
+  return resolveCredentials('assistant')
+}
+
 export async function getUnifiedProvider(capability: AiCapability): Promise<UnifiedAiProvider | null> {
   const creds = await resolveCredentials(capability)
   if (!creds) return null

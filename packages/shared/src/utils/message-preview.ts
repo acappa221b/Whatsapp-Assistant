@@ -1,4 +1,8 @@
-import { AUDIO_DISPLAY_LABEL, parseAudioMessageContent } from './media-content-format'
+import {
+  AUDIO_DISPLAY_LABEL,
+  isAudioPendingGate,
+  parseAudioMessageContent,
+} from './media-content-format'
 
 const PREVIEW_MAX_LENGTH = 120
 
@@ -10,6 +14,9 @@ export function resolveMessagePreview(
   const trimmed = content?.trim()
   if (trimmed && trimmed !== '—' && !trimmed.startsWith('[unclassified:')) {
     if (messageType === 'AUDIO') {
+      if (isAudioPendingGate(trimmed)) {
+        return 'Áudio (transcrevendo…)'
+      }
       const parsed = parseAudioMessageContent(trimmed)
       if (parsed.isTranscribed && parsed.transcription) {
         const text = parsed.transcription

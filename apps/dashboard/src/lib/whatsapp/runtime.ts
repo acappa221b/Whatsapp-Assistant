@@ -1,5 +1,5 @@
 import { config } from '@finance-ai/shared/config'
-import { ChatIdentityResolver } from '@finance-ai/shared/utils'
+import { ChatIdentityResolver, AUDIO_PENDING_CONTENT } from '@finance-ai/shared/utils'
 import { InMemoryEventBus } from '@finance-ai/core/events'
 import { DomainEvents } from '@finance-ai/core/events'
 import {
@@ -416,6 +416,15 @@ function ensureWhatsappPipelinesRegistered(): void {
       const result = await runtime.resolveChatNamesUseCase.execute({ chatIds: [chatId] })
       const match = result.results.find((entry) => entry.chatId === chatId)
       return match?.name ?? null
+    },
+    async (payload) => {
+      if (payload.messageType === 'AUDIO' && !payload.fromMe) {
+        const config = await runtime.chatConfigRepository.findByChatId(payload.chatId)
+        if (config?.audioProcessingEnabled) {
+          return { ...payload, content: AUDIO_PENDING_CONTENT }
+        }
+      }
+      return payload
     },
   )
   const connectionPipeline = new WhatsappConnectionPipeline(runtime.eventBus)

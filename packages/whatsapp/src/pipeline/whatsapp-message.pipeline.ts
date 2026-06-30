@@ -23,6 +23,9 @@ export class WhatsappMessagePipeline {
       chatId: string,
       hint?: string | null,
     ) => Promise<string | null>,
+    private readonly transformIncoming?: (
+      payload: StoreWhatsappMessageInput,
+    ) => Promise<StoreWhatsappMessageInput>,
   ) {}
 
   register(): () => void {
@@ -44,7 +47,10 @@ export class WhatsappMessagePipeline {
           chatId: payload.chatId,
           chatType: resolveChatType(payload.chatId),
         })
-        const saved = await this.storeUseCase.execute(payload)
+        const storeInput = this.transformIncoming
+          ? await this.transformIncoming({ ...payload, chatName })
+          : { ...payload, chatName }
+        const saved = await this.storeUseCase.execute(storeInput)
         recordMessagePersisted()
         logRc07('PERSIST', {
           chatId: payload.chatId,

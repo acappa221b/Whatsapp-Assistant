@@ -1,0 +1,1 @@
+-- RC-25: assistant_chat ApiUsageCategory (SQLite stores category as TEXT; no ALTER required)

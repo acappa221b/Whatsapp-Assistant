@@ -93,7 +93,9 @@ export function MessageArchiveView() {
         return
       }
       setChatsError(null)
-      const items = [...(data.items ?? [])].sort((a, b) => a.displayNumber - b.displayNumber)
+      const items = [...(data.items ?? [])].sort(
+        (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+      )
       setChats(items)
     } catch (error) {
       setChatsError(error instanceof Error ? error.message : 'Erro de rede')
@@ -153,13 +155,7 @@ export function MessageArchiveView() {
   const selectedChat = chats.find((chat) => chat.chatId === selectedChatId)
   const hasPendingAudio =
     Boolean(selectedChat?.audioProcessingEnabled) &&
-    messages.some(
-      (message) =>
-        message.messageType === 'AUDIO' &&
-        !message.fromMe &&
-        message.transcriptionStatus !== 'done' &&
-        message.transcriptionStatus !== 'failed',
-    )
+    selectedChat?.lastMessagePreview.includes('transcrevendo')
 
   useEffect(() => {
     if (!selectedChatId) return
@@ -303,6 +299,9 @@ export function MessageArchiveView() {
             <h2 className="font-medium">
               {selectedChat ? displayChatName(selectedChat) : 'Conversa'}
             </h2>
+            {hasPendingAudio ? (
+              <p className="text-xs text-muted-foreground">Processando áudio…</p>
+            ) : null}
           </div>
 
           <div

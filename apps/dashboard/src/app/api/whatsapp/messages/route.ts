@@ -3,6 +3,7 @@ import {
   resolveMessageDisplayContent,
   formatChatDisplayId,
   getAudioTranscriptionStatus,
+  shouldHideInboundAudioUntilTranscribed,
 } from '@finance-ai/shared/utils'
 import { ensureWhatsappReady, getChatIdentityResolver, getWhatsappRuntime } from '@/lib/whatsapp/runtime'
 import { mapRepositoryError } from '@/lib/api-error'
@@ -26,15 +27,26 @@ export async function GET(request: Request) {
     const identity = getChatIdentityResolver()
 
     let chatDisplayNumber: number | null = null
+    let audioProcessingEnabled = false
     if (chatId) {
       const config = await chatConfigRepository.findByChatId(chatId)
       if (!config?.archiveEnabled) {
         return NextResponse.json({ error: 'Chat not enabled for archive' }, { status: 403 })
       }
       chatDisplayNumber = config.displayNumber
+      audioProcessingEnabled = config.audioProcessingEnabled
     }
 
     const result = await listUseCase.execute({ processed, chatId }, { page, limit })
+
+    const visibleItems = result.items.filter(
+      (message) =>
+        !shouldHideInboundAudioUntilTranscribed(
+          message.content,
+          message.messageType,
+          audioProcessingEnabled,
+        ),
+    )
 
     console.info('[RC-05/API_MESSAGES_RESPONSE]', {
       at: new Date().toISOString(),
@@ -48,7 +60,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       chatDisplayNumber,
       chatDisplayLabel: chatDisplayNumber ? formatChatDisplayId(chatDisplayNumber) : null,
-      items: result.items.map((message) => ({
+      items: visibleItems.map((message) => ({
         id: message.id,
         externalMessageId: message.externalMessageId,
         chatId: message.chatId,

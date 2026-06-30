@@ -8,6 +8,7 @@ export type {
 export {
   buildMonthDayKeys,
   fillDailySeries,
+  fillDailySeriesWithCost,
   monthRangeUtc,
   toDateKey,
 } from './domain/dashboard-analytics.types'

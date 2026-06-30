@@ -8,8 +8,10 @@ import {
   type AssistantPreview,
   type AssistantCommand,
 } from '@finance-ai/core/domains/assistant-ops'
-import { prisma, AssistantActionLogPrismaRepository } from '@finance-ai/database'
-import { getUnifiedProvider } from '@/lib/ai/ai-provider-service'
+import { RecordApiTokenUsageUseCase } from '@finance-ai/core/domains/api-token-usage'
+import { prisma, AssistantActionLogPrismaRepository, ApiTokenUsagePrismaRepository } from '@finance-ai/database'
+import type { UnifiedAiResult } from '@finance-ai/ai'
+import { getUnifiedProvider, getAssistantProviderCredentials } from '@/lib/ai/ai-provider-service'
 import {
   composeAgentPromptUseCase,
   getCompanyName,
@@ -36,6 +38,19 @@ export type AssistantChatResponse =
   | { phase: 'error'; message: string }
 
 let lastSendAt = 0
+
+const recordTokenUsage = new RecordApiTokenUsageUseCase(new ApiTokenUsagePrismaRepository(prisma))
+
+async function recordAssistantChatUsage(result: UnifiedAiResult): Promise<void> {
+  const creds = await getAssistantProviderCredentials()
+  await recordTokenUsage.execute({
+    category: 'assistant_chat',
+    model: result.model,
+    provider: creds?.provider ?? 'unknown',
+    tokensInput: result.tokensInput,
+    tokensOutput: result.tokensOutput,
+  })
+}
 
 async function buildAssistantSystemPrompt(query: string): Promise<string> {
   const persona = await getDefaultPersona()
@@ -104,6 +119,7 @@ async function parseWithLlm(
     user: message,
     history,
   })
+  await recordAssistantChatUsage(result)
 
   try {
     const parsed = extractJsonFromText(result.text) as { action: string }
@@ -147,6 +163,7 @@ async function handleSendMessage(
         system,
         user: `Instrução: ${instruction}`,
       })
+      await recordAssistantChatUsage(result)
       return result.text.trim()
     },
   })
@@ -329,6 +346,7 @@ export async function handleAssistantChat(input: {
             user: question,
             history,
           })
+          await recordAssistantChatUsage(result)
           return result.text
         },
       },

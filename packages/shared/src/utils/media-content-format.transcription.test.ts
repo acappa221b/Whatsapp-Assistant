@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AUDIO_PENDING_CONTENT,
   formatAudioTranscriptionFailed,
   getAudioTranscriptionStatus,
+  isAudioPendingGate,
   isAudioTranscriptionFailed,
   isPendingAudioTranscription,
   parseAudioMessageContent,
+  shouldHideInboundAudioUntilTranscribed,
 } from './media-content-format'
 
 describe('media-content-format transcription states', () => {
@@ -31,7 +34,26 @@ describe('media-content-format transcription states', () => {
 
   it('treats pending audio without transcription text', () => {
     expect(isPendingAudioTranscription('[audio]')).toBe(true)
+    expect(isPendingAudioTranscription(AUDIO_PENDING_CONTENT)).toBe(true)
     expect(isPendingAudioTranscription('[ÁUDIO] pronto')).toBe(false)
     expect(isPendingAudioTranscription('[ÁUDIO_ERRO] falhou')).toBe(false)
+  })
+
+  it('gates inbound audio until transcription completes', () => {
+    expect(isAudioPendingGate(AUDIO_PENDING_CONTENT)).toBe(true)
+    expect(
+      shouldHideInboundAudioUntilTranscribed(AUDIO_PENDING_CONTENT, 'AUDIO', true),
+    ).toBe(true)
+    expect(
+      shouldHideInboundAudioUntilTranscribed('[ÁUDIO] pronto', 'AUDIO', true),
+    ).toBe(false)
+    expect(shouldHideInboundAudioUntilTranscribed('[audio]', 'AUDIO', false)).toBe(false)
+    expect(
+      shouldHideInboundAudioUntilTranscribed('[ÁUDIO_ERRO] x', 'AUDIO', true),
+    ).toBe(false)
+  })
+
+  it('derives pending status for AUDIO_PENDING gate', () => {
+    expect(getAudioTranscriptionStatus(AUDIO_PENDING_CONTENT, 'AUDIO')).toBe('pending')
   })
 })

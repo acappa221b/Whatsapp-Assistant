@@ -3,6 +3,7 @@ export type ApiUsageCategory =
   | 'photo_processing'
   | 'audio_processing'
   | 'report_generation'
+  | 'assistant_chat'
   | 'other'
 
 export type ApiTokenUsageRecord = {

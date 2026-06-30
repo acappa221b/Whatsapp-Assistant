@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/assistant', label: 'Chat IA', accent: 'pink' as const },
   { href: '/dashboard', label: 'Dashboard', accent: 'orange' as const },
   { href: '/dashboard/messages', label: 'Mensagens', accent: 'pink' as const },
+  { href: '/dashboard/multi-mensagem', label: 'Multi Mensagem', accent: 'green' as const },
   { href: '/dashboard/reports', label: 'Relatórios', accent: 'orange' as const },
   { href: '/dashboard/settings', label: 'Configurações', accent: 'orange' as const },
 ] as const

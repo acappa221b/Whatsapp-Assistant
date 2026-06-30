@@ -3,7 +3,12 @@ import type {
   DashboardAnalyticsRepository,
   DashboardMetrics,
 } from '@finance-ai/core/domains/dashboard-analytics'
-import { fillDailySeries, monthRangeUtc, toDateKey } from '@finance-ai/core/domains/dashboard-analytics'
+import {
+  fillDailySeries,
+  fillDailySeriesWithCost,
+  monthRangeUtc,
+  toDateKey,
+} from '@finance-ai/core/domains/dashboard-analytics'
 
 export class DashboardAnalyticsPrismaRepository implements DashboardAnalyticsRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -122,18 +127,21 @@ export class DashboardAnalyticsPrismaRepository implements DashboardAnalyticsRep
       photo_processing: new Map<string, number>(),
       audio_processing: new Map<string, number>(),
       report_generation: new Map<string, number>(),
+      assistant_chat: new Map<string, number>(),
     }
     const costByCategory = {
       agent_message: new Map<string, number>(),
       photo_processing: new Map<string, number>(),
       audio_processing: new Map<string, number>(),
       report_generation: new Map<string, number>(),
+      assistant_chat: new Map<string, number>(),
     }
     const categoryTotals = {
       agent_message: { cost: 0, count: 0 },
       photo_processing: { cost: 0, count: 0 },
       audio_processing: { cost: 0, count: 0 },
       report_generation: { cost: 0, count: 0 },
+      assistant_chat: { cost: 0, count: 0 },
     }
 
     for (const row of tokenUsage) {
@@ -167,6 +175,10 @@ export class DashboardAnalyticsPrismaRepository implements DashboardAnalyticsRep
         categoryTotals.report_generation.count > 0
           ? categoryTotals.report_generation.cost / categoryTotals.report_generation.count
           : 0,
+      assistant_chat:
+        categoryTotals.assistant_chat.count > 0
+          ? categoryTotals.assistant_chat.cost / categoryTotals.assistant_chat.count
+          : 0,
     }
 
     return {
@@ -179,12 +191,38 @@ export class DashboardAnalyticsPrismaRepository implements DashboardAnalyticsRep
         photos: fillDailySeries(year, month, photosByDay),
       },
       costs: {
-        tokenUsage: fillDailySeries(year, month, tokenByDay),
+        tokenUsage: fillDailySeriesWithCost(year, month, tokenByDay, costByDay),
         tokensByCategory: {
-          agent_message: fillDailySeries(year, month, tokensByCategory.agent_message),
-          photo_processing: fillDailySeries(year, month, tokensByCategory.photo_processing),
-          audio_processing: fillDailySeries(year, month, tokensByCategory.audio_processing),
-          report_generation: fillDailySeries(year, month, tokensByCategory.report_generation),
+          agent_message: fillDailySeriesWithCost(
+            year,
+            month,
+            tokensByCategory.agent_message,
+            costByCategory.agent_message,
+          ),
+          photo_processing: fillDailySeriesWithCost(
+            year,
+            month,
+            tokensByCategory.photo_processing,
+            costByCategory.photo_processing,
+          ),
+          audio_processing: fillDailySeriesWithCost(
+            year,
+            month,
+            tokensByCategory.audio_processing,
+            costByCategory.audio_processing,
+          ),
+          report_generation: fillDailySeriesWithCost(
+            year,
+            month,
+            tokensByCategory.report_generation,
+            costByCategory.report_generation,
+          ),
+          assistant_chat: fillDailySeriesWithCost(
+            year,
+            month,
+            tokensByCategory.assistant_chat,
+            costByCategory.assistant_chat,
+          ),
         },
         costBrl: fillDailySeries(year, month, costByDay),
         costByCategory: {
@@ -192,6 +230,7 @@ export class DashboardAnalyticsPrismaRepository implements DashboardAnalyticsRep
           photo_processing: fillDailySeries(year, month, costByCategory.photo_processing),
           audio_processing: fillDailySeries(year, month, costByCategory.audio_processing),
           report_generation: fillDailySeries(year, month, costByCategory.report_generation),
+          assistant_chat: fillDailySeries(year, month, costByCategory.assistant_chat),
         },
         averageCostBrl,
       },
