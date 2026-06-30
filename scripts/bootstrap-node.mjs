@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Bootstrap via Node global — garante tools/node/ e imprime o caminho. */
+/** Uses global Node to prepare tools/node/ and print the executable path. */
 import { ensureLocalNode } from './ensure-node.mjs'
 
 try {

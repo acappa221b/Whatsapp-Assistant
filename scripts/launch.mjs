@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
@@ -9,6 +9,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const LOG_DIR = resolve(ROOT, 'logs')
 const LOG_FILE = resolve(LOG_DIR, 'launcher.log')
 const PORT = Number(process.env.PORT || 4000)
+const NODE_BIN_DIR = dirname(process.execPath)
+const COREPACK_EXE = resolve(
+  NODE_BIN_DIR,
+  process.platform === 'win32' ? 'corepack.cmd' : 'corepack',
+)
+const PNPM_EXE = resolve(
+  NODE_BIN_DIR,
+  process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+)
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`
@@ -27,13 +36,67 @@ function run(command, args, opts = {}) {
   })
 }
 
+function createLauncherEnv(extraEnv = {}) {
+  const pathKey = process.platform === 'win32' ? 'Path' : 'PATH'
+  const currentPath = process.env[pathKey] ?? process.env.PATH ?? ''
+  return {
+    ...process.env,
+    ...extraEnv,
+    [pathKey]: `${NODE_BIN_DIR}${process.platform === 'win32' ? ';' : ':'}${currentPath}`,
+  }
+}
+
+function getPnpmCommand(args = []) {
+  if (existsSync(PNPM_EXE)) {
+    return {
+      command: PNPM_EXE,
+      args,
+      env: createLauncherEnv(),
+    }
+  }
+
+  if (existsSync(COREPACK_EXE)) {
+    return {
+      command: COREPACK_EXE,
+      args: ['pnpm', ...args],
+      env: createLauncherEnv(),
+    }
+  }
+
+  return {
+    command: 'pnpm',
+    args,
+    env: createLauncherEnv(),
+  }
+}
+
+function ensureLocalPnpmShim() {
+  if (!existsSync(COREPACK_EXE)) return
+
+  if (process.platform === 'win32') {
+    if (!existsSync(PNPM_EXE)) {
+      writeFileSync(PNPM_EXE, '@echo off\r\n"%~dp0corepack.cmd" pnpm %*\r\n', 'ascii')
+    }
+    return
+  }
+
+  if (!existsSync(PNPM_EXE)) {
+    writeFileSync(PNPM_EXE, '#!/bin/sh\n"$(dirname "$0")/corepack" pnpm "$@"\n', 'ascii')
+  }
+}
+
+async function runPnpm(args) {
+  const pnpm = getPnpmCommand(args)
+  await run(pnpm.command, pnpm.args, { env: pnpm.env })
+}
+
 function checkNode() {
   const version = process.versions.node
   const major = Number(version.split('.')[0])
   if (major < 20) {
     log(
-      `Node ${version} detectado — requer Node 20+. ` +
-        `No Windows, execute Start WhatsApp Assistant.bat para instalar automaticamente.`,
+      `Node ${version} detected - requires Node 20+. ` +
+        `On Windows, run Start WhatsApp Assistant.bat to install it automatically.`,
     )
     process.exit(1)
   }
@@ -75,36 +138,51 @@ async function main() {
   checkNode()
 
   try {
-    execSync('corepack enable', { stdio: 'ignore', cwd: ROOT })
-    execSync('corepack prepare pnpm@9.15.0 --activate', { stdio: 'inherit', cwd: ROOT })
+    if (existsSync(COREPACK_EXE)) {
+      execSync(`"${COREPACK_EXE}" prepare pnpm@9.15.0 --activate`, {
+        stdio: 'inherit',
+        cwd: ROOT,
+        env: createLauncherEnv(),
+      })
+    } else {
+      execSync('corepack enable', { stdio: 'ignore', cwd: ROOT, env: createLauncherEnv() })
+      execSync('corepack prepare pnpm@9.15.0 --activate', {
+        stdio: 'inherit',
+        cwd: ROOT,
+        env: createLauncherEnv(),
+      })
+    }
   } catch {
-    log('corepack não disponível — usando pnpm global se instalado')
+    log('corepack not available - using global pnpm if installed')
   }
+
+  ensureLocalPnpmShim()
 
   if (needsInstall()) {
-    log('Instalando dependências (pnpm install)…')
-    await run('pnpm', ['install'])
+    log('Installing dependencies (pnpm install)...')
+    await runPnpm(['install'])
   }
 
-  log('Aplicando migrations…')
-  await run('pnpm', ['db:migrate'])
-  await run('pnpm', ['db:generate'])
+  log('Applying migrations...')
+  await runPnpm(['db:migrate'])
+  await runPnpm(['db:generate'])
 
-  log(`Iniciando servidor na porta ${PORT}…`)
-  const dev = spawn('pnpm', ['--filter', '@finance-ai/dashboard', 'dev'], {
+  log(`Starting server on port ${PORT}...`)
+  const pnpm = getPnpmCommand(['--filter', '@finance-ai/dashboard', 'dev'])
+  const dev = spawn(pnpm.command, pnpm.args, {
     cwd: ROOT,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: { ...process.env, PORT: String(PORT) },
+    env: createLauncherEnv({ PORT: String(PORT) }),
   })
 
   const ready = await waitForHealth(PORT)
   if (ready) {
     const url = `http://localhost:${PORT}`
-    log(`Servidor pronto — abrindo ${url}`)
+    log(`Server ready - opening ${url}`)
     openBrowser(url)
   } else {
-    log('Timeout aguardando /api/health — verifique logs do servidor')
+    log('Timed out waiting for /api/health - check server logs')
   }
 
   dev.on('exit', (code) => {

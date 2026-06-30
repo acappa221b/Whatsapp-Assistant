@@ -154,7 +154,7 @@ Detalhes: [docs/refactor/deprecated-modules.md](docs/refactor/deprecated-modules
 
 1. Clone o repositório
 2. Execute o launcher na pasta do projeto:
-   - **Windows:** duplo-clique em `Start WhatsApp Assistant.bat` — **não precisa instalar Node manualmente**; na primeira execução o launcher baixa Node.js 20 LTS para `tools/node/` (somente neste PC)
+   - **Windows:** duplo-clique em `Start WhatsApp Assistant.bat` — **nao precisa instalar Node manualmente**; na primeira execucao o launcher baixa Node.js 20 LTS para `tools/node/` (somente neste PC)
    - **macOS:** duplo-clique em `Start WhatsApp Assistant.command` (instale [Node.js 20+](https://nodejs.org) antes)
    - **Terminal:** `pnpm launch` ou `node scripts/launch.mjs` (requer Node 20+ no PATH)
 3. O navegador abrirá em [http://localhost:4000](http://localhost:4000)
@@ -164,7 +164,9 @@ Detalhes: [docs/refactor/deprecated-modules.md](docs/refactor/deprecated-modules
 
 ### Windows sem Node instalado
 
-Duplo-clique no `.bat` → download automático do Node portátil → instalação de dependências → browser em `:4000`. A segunda execução reutiliza `tools/node/` sem baixar de novo.
+Duplo-clique no `.bat` -> download automatico do Node portatil -> instalacao de dependencias -> browser em `:4000`. A segunda execucao reutiliza `tools/node/` sem baixar de novo.
+
+Em PCs corporativos, antivirus, proxy ou firewall podem atrasar o download inicial do Node.js. Se o launcher falhar, verifique `logs/launcher.log`.
 
 ### O que fica só no seu computador
 
@@ -185,7 +187,7 @@ pnpm db:migrate && pnpm db:generate
 pnpm dev
 ```
 
-Abrir [http://localhost:4000/dashboard/whatsapp](http://localhost:4000/dashboard/whatsapp) para conectar.
+Abrir [http://localhost:4000/dashboard/settings?tab=whatsapp](http://localhost:4000/dashboard/settings?tab=whatsapp) para conectar.
 
 Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 

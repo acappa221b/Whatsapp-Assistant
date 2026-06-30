@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Imprime no stdout o caminho absoluto do Node local (garante download se necessário). */
+/** Prints the absolute path of the local Node executable. */
 import { ensureLocalNode } from './ensure-node.mjs'
 
 try {

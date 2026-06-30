@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Garante Node.js 20 LTS portátil em tools/node/ (Windows x64).
- * Exporta getLocalNodeExecutable() e ensureLocalNode().
+ * Ensures portable Node.js 20 LTS in tools/node/ on Windows x64.
+ * Exports getLocalNodeExecutable() and ensureLocalNode().
  */
 import { createWriteStream, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { execSync } from 'node:child_process'
@@ -40,7 +40,7 @@ function nodeZipName() {
   return null
 }
 
-/** Caminho do executável local, se o arquivo existir. */
+/** Returns the local executable path when present. */
 export function getLocalNodeExecutable() {
   if (process.platform === 'win32') {
     return join(NODE_DIR, 'node.exe')
@@ -67,14 +67,14 @@ function isSupportedPlatform() {
 function unsupportedMessage() {
   if (process.platform === 'darwin' || process.platform === 'linux') {
     return (
-      'Bootstrap automático do Node ainda não está disponível neste sistema.\n' +
-      'Instale Node.js 20+ manualmente: https://nodejs.org\n' +
-      'Depois execute: pnpm launch'
+      'Automatic Node bootstrap is not available on this system yet.\n' +
+      'Install Node.js 20+ manually: https://nodejs.org\n' +
+      'Then run: pnpm launch'
     )
   }
   return (
-    `Bootstrap automático do Node não suporta ${process.platform}/${process.arch}.\n` +
-    'Instale Node.js 20+ manualmente: https://nodejs.org'
+    `Automatic Node bootstrap does not support ${process.platform}/${process.arch}.\n` +
+    'Install Node.js 20+ manually: https://nodejs.org'
   )
 }
 
@@ -96,8 +96,8 @@ function downloadAndExtractWindows() {
     rmSync(extractRoot, { recursive: true, force: true })
   }
 
-  log(`Baixando ${url}`)
-  console.log(`Baixando Node.js ${NODE_TARGET_VERSION}…`)
+  log(`Downloading ${url}`)
+  console.log(`Downloading Node.js ${NODE_TARGET_VERSION}...`)
 
   const ps = [
     '$ProgressPreference = "SilentlyContinue"',
@@ -113,16 +113,16 @@ function downloadAndExtractWindows() {
     })
   } catch (error) {
     const hint =
-      'Verifique sua conexão com a internet e tente novamente.\n' +
-      'Se o problema persistir, instale Node.js 20+ em https://nodejs.org'
-    log(`Falha no download: ${error instanceof Error ? error.message : String(error)}`)
-    throw new Error(`Não foi possível baixar o Node.js.\n${hint}`)
+      'Check your internet connection and try again.\n' +
+      'If the problem continues, install Node.js 20+ from https://nodejs.org'
+    log(`Download failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(`Could not download Node.js.\n${hint}`)
   }
 
   const entries = readdirSync(extractRoot, { withFileTypes: true })
   const innerDir = entries.find((e) => e.isDirectory())
   if (!innerDir) {
-    throw new Error('Pacote Node extraído em formato inesperado.')
+    throw new Error('Unexpected extracted Node package format.')
   }
 
   const innerPath = join(extractRoot, innerDir.name)
@@ -142,13 +142,13 @@ function downloadAndExtractWindows() {
     // cleanup best-effort
   }
 
-  log(`Node instalado em ${NODE_DIR}`)
-  console.log(`Node.js ${NODE_TARGET_VERSION} instalado em tools/node/`)
+  log(`Node installed in ${NODE_DIR}`)
+  console.log(`Node.js ${NODE_TARGET_VERSION} installed in tools/node/`)
 }
 
 /**
- * Garante Node local >= 20. Baixa no Windows x64 se necessário.
- * @returns Caminho absoluto do executável
+ * Ensures local Node >= 20. Downloads on Windows x64 when needed.
+ * @returns Absolute executable path
  */
 export async function ensureLocalNode() {
   const executable = getLocalNodeExecutable()
@@ -156,10 +156,10 @@ export async function ensureLocalNode() {
   if (existsSync(executable)) {
     const major = readNodeMajor(executable)
     if (major >= NODE_MIN_MAJOR) {
-      log(`Node local OK: ${executable} (v${major})`)
+      log(`Local Node OK: ${executable} (v${major})`)
       return executable
     }
-    log(`Node local desatualizado (${major}), reinstalando…`)
+    log(`Local Node is outdated (${major}), reinstalling...`)
   }
 
   if (!isSupportedPlatform()) {
@@ -169,12 +169,12 @@ export async function ensureLocalNode() {
   downloadAndExtractWindows()
 
   if (!existsSync(executable)) {
-    throw new Error('Node.js foi extraído, mas node.exe não foi encontrado em tools/node/')
+    throw new Error('Node.js was extracted, but node.exe was not found in tools/node/')
   }
 
   const major = readNodeMajor(executable)
   if (major < NODE_MIN_MAJOR) {
-    throw new Error(`Node instalado é v${major}; requer ${NODE_MIN_MAJOR}+.`)
+    throw new Error(`Installed Node is v${major}; requires ${NODE_MIN_MAJOR}+.`)
   }
 
   return executable

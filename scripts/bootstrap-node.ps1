@@ -1,19 +1,17 @@
-# Bootstrap Node.js portátil no Windows (sem Node pré-instalado)
-# Uso: powershell -ExecutionPolicy Bypass -File scripts\bootstrap-node.ps1
-
 $ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $NodeVersion = "20.18.0"
 $NodeDir = Join-Path $Root "tools\node"
 $NodeExe = Join-Path $NodeDir "node.exe"
 $LogDir = Join-Path $Root "logs"
 $LogFile = Join-Path $LogDir "launcher.log"
+$LaunchScript = Join-Path $Root "scripts\launch.mjs"
 
 function Write-Log([string]$Message) {
-    if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
-    $line = "[$(Get-Date -Format o)] [bootstrap-ps1] $Message"
+    if (-not (Test-Path $LogDir)) {
+        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    }
+    $line = "[{0}] [bootstrap-ps1] {1}" -f (Get-Date -Format o), $Message
     Add-Content -Path $LogFile -Value $line -Encoding UTF8
 }
 
@@ -35,50 +33,48 @@ function Install-PortableNode {
     $extractRoot = Join-Path $env:TEMP "whatsapp-assistant-node-extract"
 
     Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "  Primeira execucao — baixando Node.js $NodeVersion" -ForegroundColor Cyan
-    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "==============================================================="
+    Write-Host "First run - downloading Node.js $NodeVersion"
+    Write-Host "==============================================================="
     Write-Host ""
-    Write-Host "Aguarde. Isso pode levar alguns minutos dependendo da internet..."
+    Write-Host "Please wait..."
     Write-Host ""
 
-    Write-Log "Baixando $url"
-
+    Write-Log "Downloading $url"
     try {
-        $ProgressPreference = "Continue"
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
     } catch {
         Write-Host ""
-        Write-Host "ERRO: Nao foi possivel baixar o Node.js." -ForegroundColor Red
-        Write-Host "Verifique sua conexao com a internet e tente novamente." -ForegroundColor Yellow
-        Write-Host "Alternativa: instale Node.js 20+ em https://nodejs.org" -ForegroundColor Yellow
+        Write-Host "ERROR: Could not download Node.js."
+        Write-Host "Check internet connection and try again."
+        Write-Host "Alternative: install Node.js 20+ from https://nodejs.org"
         Write-Host ""
-        Write-Log "Falha download: $_"
+        Write-Log ("Download failed: " + $_.Exception.Message)
         exit 1
     }
 
     if (Test-Path $extractRoot) { Remove-Item $extractRoot -Recurse -Force }
     if (Test-Path $NodeDir) { Remove-Item $NodeDir -Recurse -Force }
 
-    Write-Host "Extraindo arquivos..."
+    Write-Host "Extracting files..."
     Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
 
     $inner = Get-ChildItem -Path $extractRoot -Directory | Select-Object -First 1
     if (-not $inner) {
-        Write-Host "ERRO: Pacote Node em formato inesperado." -ForegroundColor Red
+        Write-Host "ERROR: Unexpected Node package format."
+        Write-Log "Unexpected package format"
         exit 1
     }
 
     New-Item -ItemType Directory -Path $NodeDir -Force | Out-Null
     Copy-Item -Path (Join-Path $inner.FullName "*") -Destination $NodeDir -Recurse -Force
-
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
     Remove-Item $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
 
-    Write-Log "Node instalado em $NodeDir"
+    Write-Log "Node installed in $NodeDir"
     Write-Host ""
-    Write-Host "Node.js instalado com sucesso em tools\node\" -ForegroundColor Green
+    Write-Host "Node.js installed successfully in tools\node"
     Write-Host ""
 }
 
@@ -87,13 +83,12 @@ if (-not (Test-NodeOk $NodeExe)) {
 }
 
 if (-not (Test-NodeOk $NodeExe)) {
-    Write-Host "ERRO: node.exe nao encontrado apos instalacao." -ForegroundColor Red
+    Write-Host "ERROR: node.exe not found after installation."
+    Write-Log "node.exe not found after install"
     exit 1
 }
 
-$LaunchScript = Join-Path $Root "scripts\launch.mjs"
-Write-Host "Iniciando WhatsApp Assistant..."
-Write-Log "Executando $NodeExe $LaunchScript"
-
+Write-Host "Starting WhatsApp Assistant..."
+Write-Log "Running launch.mjs"
 & $NodeExe $LaunchScript
 exit $LASTEXITCODE
