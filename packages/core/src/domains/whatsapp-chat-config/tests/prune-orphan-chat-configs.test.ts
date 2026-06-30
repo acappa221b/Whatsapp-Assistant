@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WhatsappChatConfig } from '../domain/whatsapp-chat-config.entity'
 import { InMemoryWhatsappChatConfigRepository } from '../infrastructure/in-memory-whatsapp-chat-config.repository'
-import { PruneOrphanChatConfigsUseCase } from './prune-orphan-chat-configs.use-case'
+import { PruneOrphanChatConfigsUseCase } from '../application/prune-orphan-chat-configs.use-case'
 
 describe('PruneOrphanChatConfigsUseCase', () => {
   it('dry-run lists orphan configs without messages', async () => {
