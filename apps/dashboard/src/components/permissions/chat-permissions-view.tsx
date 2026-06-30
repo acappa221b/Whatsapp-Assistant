@@ -258,6 +258,13 @@ export function ChatPermissionsView() {
         </div>
       ) : null}
 
+      {!loading && chats.length === 0 && !search.trim() ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Chats aparecem aqui quando uma mensagem nova chega ou quando o WhatsApp envia a lista de
+          conversas. Envie uma mensagem de teste apos conectar.
+        </div>
+      ) : null}
+
       {loading && chats.length === 0 ? (
         <p className="text-sm">Carregando e resolvendo nomes…</p>
       ) : (

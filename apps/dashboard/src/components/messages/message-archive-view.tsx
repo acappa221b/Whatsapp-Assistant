@@ -213,7 +213,13 @@ export function MessageArchiveView() {
             ) : chatsError ? (
               <p className="p-4 text-sm text-destructive">Erro ao carregar chats: {chatsError}</p>
             ) : chats.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">Nenhum chat habilitado.</p>
+              <div className="space-y-3 p-4">
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                  Habilite os chats em Permissoes para ve-los aqui. So conversas com Habilitado ligado
+                  aparecem.
+                </div>
+                <p className="text-sm text-muted-foreground">Nenhum chat habilitado.</p>
+              </div>
             ) : (
               chats.map((chat) => {
                 const active = chat.chatId === selectedChatId

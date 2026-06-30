@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.4.1-rc15  
-**Fase:** RC-15 Dashboard scroll + custos + assistant multimodal  
+**Versão:** 1.4.2-rc16  
+**Fase:** RC-16 WhatsApp sync + diagnostics (linked devices)  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -211,7 +211,8 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Versão | Descrição |
 |--------|-----------|
-| 1.4.1-rc15 | RC-15: scroll dashboard, custos estimados, sort #N, WhatsApp em Configurações, fix agent multimídia e Chat IA |
+| 1.4.2-rc16 | RC-16: sync chats ao conectar, diagnostics WhatsApp, fix messages.upsert type, banners iPhone/linked device |
+| 1.4.1-rc15 | RC-15: scroll dashboard, custos estimados, sort #N, WhatsApp em Configuracoes, fix agent multimidia e Chat IA |
 | 1.4.0-rc14 | RC-14: mensagens estilo WhatsApp, zero `.env`, launcher, config no dashboard |
 | 1.3.1-rc13 | RC-13: permissões ordenáveis, Chat IA operacional (preview/send) |
 | 1.1.1-rc10b | RC-10B: skip ack/status, anti-repetição, anti-convite na resposta IA |

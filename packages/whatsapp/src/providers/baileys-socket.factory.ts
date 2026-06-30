@@ -14,6 +14,8 @@ import { attachGroupDiscoveryListeners } from '../utils/group-discovery'
 import { attachContactDiscoveryListeners } from '../utils/contact-discovery'
 import type { ContactNameResolver } from '../utils/contact-name-resolver'
 import { ContactNameResolver as ContactNameResolverClass } from '../utils/contact-name-resolver'
+import { shouldProcessMessageUpsert } from '../utils/baileys-upsert-policy'
+import { syncHistoryChats } from '../utils/history-sync'
 import { logRc02BaileysEvent, logRc02WhatsappEventReceived } from '../utils/rc-02-diagnostic'
 
 type ConnectionUpdate = BaileysConnectionUpdate
@@ -104,7 +106,9 @@ export async function createDefaultBaileysSocket(options: {
   onChatDiscovered?: (chatId: string, name?: string | null) => void | Promise<void>
   onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
   contactNameResolver?: ContactNameResolver
+  importHistoryEnabled?: boolean
 }): Promise<BaileysSocketEvents> {
+  const importHistoryEnabled = options.importHistoryEnabled ?? false
   const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers } =
     await loadBaileysExports()
   const pino = await importFromNodeModules<(options: { level: string }) => unknown>('pino', 'pino.js')
@@ -129,7 +133,7 @@ export async function createDefaultBaileysSocket(options: {
     browser: Browsers.macOS('Finance AI'),
     printQRInTerminal: false,
     logger: pino({ level: 'silent' }),
-    syncFullHistory: false,
+    syncFullHistory: importHistoryEnabled,
   })
 
   socket.ev.on('connection.update', (update: ConnectionUpdate) => {
@@ -154,22 +158,56 @@ export async function createDefaultBaileysSocket(options: {
     void saveCreds()
     void options.onCredsUpdate()
   })
-  socket.ev.on('messages.upsert', ({ messages }: { messages: RawBaileysMessage[] }) => {
-    logRc02WhatsappEventReceived({
-      event: 'messages.upsert',
-      count: messages.length,
-      items: messages.map((message) => ({
-        chatId: message.key.remoteJid ?? null,
-        chatType: message.key.remoteJid?.endsWith('@g.us')
-          ? 'group'
-          : message.key.remoteJid?.endsWith('@lid')
-            ? 'lid'
-            : 'other',
-        messageId: message.key.id ?? null,
-        fromMe: message.key.fromMe ?? false,
-      })),
+  socket.ev.on(
+    'messages.upsert',
+    ({ messages, type }: { messages: RawBaileysMessage[]; type?: string }) => {
+      logRc02WhatsappEventReceived({
+        event: 'messages.upsert',
+        type: type ?? null,
+        count: messages.length,
+        items: messages.map((message) => ({
+          chatId: message.key.remoteJid ?? null,
+          chatType: message.key.remoteJid?.endsWith('@g.us')
+            ? 'group'
+            : message.key.remoteJid?.endsWith('@lid')
+              ? 'lid'
+              : 'other',
+          messageId: message.key.id ?? null,
+          fromMe: message.key.fromMe ?? false,
+        })),
+      })
+      if (!shouldProcessMessageUpsert(type, importHistoryEnabled)) return
+      void options.onMessages(messages)
+    },
+  )
+
+  socket.ev.on('messaging-history.set', (payload: unknown) => {
+    const data = payload as {
+      chats?: Array<{ id?: string; name?: string; subject?: string }>
+      messages?: RawBaileysMessage[]
+      isLatest?: boolean
+    }
+
+    logRc02BaileysEvent({
+      event: 'messaging-history.set',
+      chatCount: data.chats?.length ?? 0,
+      messageCount: data.messages?.length ?? 0,
+      isLatest: data.isLatest ?? null,
     })
-    void options.onMessages(messages)
+
+    void (async () => {
+      const discovered = await syncHistoryChats(data.chats, options.onChatDiscovered)
+      if (discovered > 0) {
+        console.info('[RC-16/chat-sync]', {
+          at: new Date().toISOString(),
+          discovered,
+          source: 'messaging-history.set',
+        })
+      }
+      if (importHistoryEnabled && data.messages?.length) {
+        void options.onMessages(data.messages)
+      }
+    })()
   })
 
   const resolver =

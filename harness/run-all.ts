@@ -89,6 +89,7 @@ import { Rc13Harnesses } from './rc-13'
 import { Rc14Harnesses } from './rc-14'
 import { Rc14bHarnesses } from './rc-14b'
 import { Rc15Harnesses } from './rc-15'
+import { Rc16Harnesses } from './rc-16'
 import { RepoHygieneHarnesses } from './repo-hygiene'
 import {
   Assistant01PlanningHarness,
@@ -175,6 +176,7 @@ const harnesses = [
   ...Rc14Harnesses,
   ...Rc14bHarnesses,
   ...Rc15Harnesses,
+  ...Rc16Harnesses,
   ...RepoHygieneHarnesses,
 ]
 

@@ -382,14 +382,41 @@ function SettingsPageContent() {
         ) : null}
 
         {tab === 'whatsapp' ? (
-          <Card className="border-border/60 bg-card/60">
-            <CardHeader>
-              <CardTitle className="text-base">Conexão WhatsApp</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <WhatsappConnectionPanel />
-            </CardContent>
-          </Card>
+          <>
+            <Card className="border-border/60 bg-card/60">
+              <CardHeader>
+                <CardTitle className="text-base">Conexao WhatsApp</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <WhatsappConnectionPanel />
+              </CardContent>
+            </Card>
+            {settings ? (
+              <Card className="border-border/60 bg-card/60">
+                <CardHeader>
+                  <CardTitle className="text-base">Sincronizacao</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!settings.whatsappIgnoreHistory}
+                      onChange={(e) =>
+                        void patchSettings({ whatsappIgnoreHistory: !e.target.checked })
+                      }
+                    />
+                    <span>
+                      Importar historico recente ao conectar
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Pode demorar e consumir mais dados na primeira conexao. Desligado por
+                        padrao: apenas mensagens novas entram no app.
+                      </span>
+                    </span>
+                  </label>
+                </CardContent>
+              </Card>
+            ) : null}
+          </>
         ) : null}
 
         {tab === 'relatorios' && settings ? (

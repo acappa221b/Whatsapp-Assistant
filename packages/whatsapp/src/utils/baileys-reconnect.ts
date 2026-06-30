@@ -20,6 +20,7 @@ export const SOCKET_EVENT_NAMES = [
   'groups.upsert',
   'chats.upsert',
   'chats.update',
+  'messaging-history.set',
 ] as const
 
 export function shouldAutoReconnect(input: {

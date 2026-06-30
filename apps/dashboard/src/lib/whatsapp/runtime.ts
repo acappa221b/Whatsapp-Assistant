@@ -241,6 +241,10 @@ function createRuntime(): WhatsappRuntime {
     onChatDiscovered: handleNameDiscovered,
     onContactDiscovered: handleContactDiscovered,
     onConnectionOpen: handleConnectionOpen,
+    getImportHistoryEnabled: async () => {
+      const settings = await prisma.appSettings.findUnique({ where: { id: 'default' } })
+      return settings ? !settings.whatsappIgnoreHistory : false
+    },
   })
 
   const storeUseCase = new StoreWhatsappMessageUseCase(messageRepository, eventBus)
@@ -577,6 +581,66 @@ export async function ensureWhatsappReady(): Promise<void> {
   const { ensureServerReady } = await import('@/lib/server-ready')
   await ensureServerReady()
   await bootstrapWhatsappRuntime()
+}
+
+export function areWhatsappPipelinesRegistered(): boolean {
+  return Boolean(globalForWhatsapp.whatsappPipelinesRegistered)
+}
+
+export type WhatsappDiagnostics = {
+  connected: boolean
+  liveMessageCount: number
+  dbMessageCount: number
+  chatConfigCount: number
+  archiveEnabledCount: number
+  lastEventName: string | null
+  lastEventAt: string | null
+  lastMessageAt: string | null
+  syncFullHistory: boolean
+  pipelinesRegistered: boolean
+  runtimeHealth: RuntimeHealth
+  hints: string[]
+}
+
+export async function getWhatsappDiagnostics(): Promise<WhatsappDiagnostics> {
+  const operational = await getWhatsappOperationalStatus()
+  const archiveEnabledCount = await prisma.whatsappChatConfig.count({
+    where: { archiveEnabled: true },
+  })
+  const settings = await prisma.appSettings.findUnique({ where: { id: 'default' } })
+  const importHistoryEnabled = settings ? !settings.whatsappIgnoreHistory : false
+  const hints: string[] = []
+
+  if (operational.connected && operational.liveMessageCount === 0) {
+    hints.push('Send a test message from phone after connecting')
+  }
+  if (operational.chatCount === 0 && operational.connected) {
+    hints.push('Chats appear after WhatsApp sends conversation metadata or a new message arrives')
+  }
+  if (operational.messageCount > 0 && archiveEnabledCount === 0) {
+    hints.push('Enable chats in Permissions to see them in Messages')
+  }
+  if (!importHistoryEnabled) {
+    hints.push('Old chat history is not imported by default')
+  }
+  if (operational.operationalMessage) {
+    hints.push(operational.operationalMessage)
+  }
+
+  return {
+    connected: operational.connected,
+    liveMessageCount: operational.liveMessageCount,
+    dbMessageCount: operational.messageCount,
+    chatConfigCount: operational.chatCount,
+    archiveEnabledCount,
+    lastEventName: operational.lastEventName,
+    lastEventAt: operational.lastEventAt,
+    lastMessageAt: operational.lastMessageAt,
+    syncFullHistory: importHistoryEnabled,
+    pipelinesRegistered: areWhatsappPipelinesRegistered(),
+    runtimeHealth: getRuntimeHealth(),
+    hints,
+  }
 }
 
 export async function getWhatsappOperationalStatus(): Promise<WhatsappOperationalStatus> {

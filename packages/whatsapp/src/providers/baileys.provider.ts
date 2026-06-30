@@ -60,6 +60,7 @@ export type BaileysSocketFactory = (options: {
   onChatDiscovered?: (chatId: string, name?: string | null) => void | Promise<void>
   onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
   contactNameResolver?: ContactNameResolver
+  importHistoryEnabled?: boolean
 }) => Promise<BaileysSocketEvents>
 
 export type BaileysWhatsappProviderOptions = {
@@ -70,6 +71,7 @@ export type BaileysWhatsappProviderOptions = {
   onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
   onConnectionOpen?: () => void | Promise<void>
   contactNameResolver?: ContactNameResolver
+  getImportHistoryEnabled?: () => boolean | Promise<boolean>
 }
 
 const defaultStatus = (): WhatsappStatus => ({
@@ -100,6 +102,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
   private readonly onContactDiscovered?: (jid: string, name: string) => void | Promise<void>
   private readonly onConnectionOpen?: () => void | Promise<void>
   private readonly contactNameResolver: ContactNameResolver
+  private readonly getImportHistoryEnabled?: () => boolean | Promise<boolean>
 
   constructor(options: BaileysWhatsappProviderOptions = {}) {
     this.authDir = options.authDir ?? config.whatsapp.sessionPath
@@ -109,6 +112,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     this.onContactDiscovered = options.onContactDiscovered
     this.onConnectionOpen = options.onConnectionOpen
     this.contactNameResolver = options.contactNameResolver ?? new ContactNameResolver()
+    this.getImportHistoryEnabled = options.getImportHistoryEnabled
   }
 
   async connect(): Promise<void> {
@@ -211,6 +215,9 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
       onChatDiscovered: this.onChatDiscovered,
       onContactDiscovered: this.onContactDiscovered,
       contactNameResolver: this.contactNameResolver,
+      importHistoryEnabled: this.getImportHistoryEnabled
+        ? await Promise.resolve(this.getImportHistoryEnabled())
+        : false,
     })
     this.currentSocketInstanceId = socketInstanceId
   }
