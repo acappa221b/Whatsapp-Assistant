@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.6.1-rc23  
-**Fase:** RC-23 transcrição áudio (Whisper-only, retry, UI erro)  
+**Versão:** 1.6.2-rc24  
+**Fase:** RC-24 fix parse versão (rc18b) + banner update  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -235,6 +235,10 @@ Se houver versao nova, o programa pergunta se quer atualizar. Seus chats e confi
 
 Logs: `logs/launcher.log`, `logs/update.log`
 
+### Formato de versão
+
+`MAJOR.MINOR.PATCH-rcNN[sufixo]` — exemplos: `1.6.1-rc18b`, `1.6.2-rc24`, `1.6.1` (release estável).
+
 A versao instalada aparece em **Configuracoes → Geral → Sobre** e no topo do dashboard. Novas versoes geram um banner com instrucoes.
 
 ### Ver logs e pedir ajuda (RC-20)
@@ -264,7 +268,7 @@ Requer **OpenAI Whisper** — em **Configurações → Provedores IA → Provedo
 
 ## Próximo passo
 
-**RC-23** corrige transcrição de áudio: use OpenAI Whisper em Configurações e habilite **Áudio** em Permissões para cada chat.
+**RC-24** corrige comparacao de versao com sufixo alfabético (`-rc18b`) — sem banner falso quando o GitHub esta desatualizado.
 
 ---
 
@@ -281,6 +285,7 @@ Requer **OpenAI Whisper** — em **Configurações → Provedores IA → Provedo
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.6.2-rc24 | RC-24: parse versao rc18b, fim banner falso de update, cache localVersion |
 | 1.6.1-rc23 | RC-23: transcrição áudio Whisper-only, retry/backfill, UI erro/retry |
 | 1.6.1-rc18b | RC-18B: auto-update ZIP overlay + Git no launcher, dados preservados, banner/Sobre |
 | 1.6.0-rc22 | RC-22A: sync message-driven, sem grupos/agenda auto, prune orfaos, permissoes paginadas |

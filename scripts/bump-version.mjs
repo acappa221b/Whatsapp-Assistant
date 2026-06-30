@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseVersion } from '../packages/shared/src/version/compare-versions.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const VERSION_PATH = resolve(ROOT, 'version.json')
@@ -22,6 +23,11 @@ function bumpPatch(version) {
 
 const manifest = readManifest()
 const nextVersion = bumpPatch(manifest.version)
+
+if (!parseVersion(nextVersion)) {
+  throw new Error(`Invalid version format after bump: ${nextVersion}`)
+}
+
 const updated = {
   ...manifest,
   version: nextVersion,

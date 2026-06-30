@@ -1,15 +1,9 @@
-export type ParsedVersion = {
-  major: number
-  minor: number
-  patch: number
-  prerelease?: { kind: 'rc'; rc: number; suffix: string } | { kind: 'tag'; tag: string }
-}
+/** Plain JS copy — keep in sync with compare-versions.ts (launcher / scripts). */
 
-/** MAJOR.MINOR.PATCH[-rcNN[suffix] | -tag] — e.g. 1.6.1-rc18b, 0.0.0-dev */
 const VERSION_RE =
   /^(\d+)\.(\d+)\.(\d+)(?:-rc(\d+)([a-z])?|-([a-z0-9.-]+))?$/i
 
-export function parseVersion(version: string): ParsedVersion | null {
+export function parseVersion(version) {
   const trimmed = version.trim()
   const match = trimmed.match(VERSION_RE)
   if (!match) {
@@ -22,7 +16,7 @@ export function parseVersion(version: string): ParsedVersion | null {
     }
   }
 
-  let prerelease: ParsedVersion['prerelease']
+  let prerelease
   if (match[4]) {
     prerelease = {
       kind: 'rc',
@@ -41,48 +35,40 @@ export function parseVersion(version: string): ParsedVersion | null {
   }
 }
 
-function prereleaseKey(prerelease: NonNullable<ParsedVersion['prerelease']>): string {
+function prereleaseKey(prerelease) {
   if (prerelease.kind === 'rc') {
     return `rc:${String(prerelease.rc).padStart(6, '0')}:${prerelease.suffix}`
   }
   return `tag:${prerelease.tag}`
 }
 
-function comparePrerelease(
-  left: ParsedVersion['prerelease'],
-  right: ParsedVersion['prerelease'],
-): -1 | 0 | 1 {
+function comparePrerelease(left, right) {
   if (!left && !right) return 0
   if (!left && right) return 1
   if (left && !right) return -1
-
-  const leftKey = prereleaseKey(left!)
-  const rightKey = prereleaseKey(right!)
+  const leftKey = prereleaseKey(left)
+  const rightKey = prereleaseKey(right)
   if (leftKey === rightKey) return 0
   return leftKey < rightKey ? -1 : 1
 }
 
-/** @returns -1 if a < b, 0 if equal, 1 if a > b, null if either version is invalid */
-export function compareVersions(a: string, b: string): -1 | 0 | 1 | null {
+export function compareVersions(a, b) {
   const left = parseVersion(a)
   const right = parseVersion(b)
   if (!left || !right) return null
 
-  if (left.major !== right.major) {
-    return left.major < right.major ? -1 : 1
-  }
-  if (left.minor !== right.minor) {
-    return left.minor < right.minor ? -1 : 1
-  }
-  if (left.patch !== right.patch) {
-    return left.patch < right.patch ? -1 : 1
-  }
-
+  if (left.major !== right.major) return left.major < right.major ? -1 : 1
+  if (left.minor !== right.minor) return left.minor < right.minor ? -1 : 1
+  if (left.patch !== right.patch) return left.patch < right.patch ? -1 : 1
   return comparePrerelease(left.prerelease, right.prerelease)
 }
 
-export function isNewerVersion(latest: string, current: string): boolean {
+export function isNewerVersion(latest, current) {
   const cmp = compareVersions(latest, current)
   if (cmp === null) return false
   return cmp > 0
+}
+
+export function isUpdateAvailable(local, remote) {
+  return isNewerVersion(remote, local)
 }

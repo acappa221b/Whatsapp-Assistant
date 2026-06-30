@@ -57,7 +57,11 @@ export async function checkRemoteVersion(root, options = {}) {
 
   if (!options.force) {
     const cached = readCache(root)
-    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    if (
+      cached &&
+      cached.localVersion === localVersion &&
+      Date.now() - cached.fetchedAt < CACHE_TTL_MS
+    ) {
       return {
         localVersion,
         remoteVersion: cached.remoteVersion,
@@ -87,6 +91,7 @@ export async function checkRemoteVersion(root, options = {}) {
 
     writeCache(root, {
       fetchedAt: Date.now(),
+      localVersion,
       remoteVersion,
       remoteManifest,
       updateAvailable,

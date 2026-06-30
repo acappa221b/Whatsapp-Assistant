@@ -1,5 +1,5 @@
 {
-  "version": "1.6.1-rc23",
+  "version": "1.6.2-rc24",
   "appName": "WhatsApp Assistant",
   "github": {
     "owner": "acappa221b",
@@ -7,6 +7,6 @@
     "branch": "main"
   },
   "releasedAt": "2026-06-30",
-  "releaseNotes": "RC-23: transcrição áudio Whisper-only, retry/backfill, UI erro/retry, download resiliente",
+  "releaseNotes": "RC-24: corrige parse de versao rc18b e banner falso de atualizacao",
   "minLauncherVersion": 1
 }

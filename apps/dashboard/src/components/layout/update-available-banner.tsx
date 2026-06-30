@@ -55,7 +55,7 @@ export function UpdateAvailableBanner() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <p className="font-medium text-amber-900 dark:text-amber-100">
-            Nova versao {data.latestVersion} disponivel
+            Nova versao {data.latestVersion} disponivel (instalada: {data.version})
           </p>
           <p className="text-muted-foreground">{restartMessage}</p>
           {data.releaseNotes ? (

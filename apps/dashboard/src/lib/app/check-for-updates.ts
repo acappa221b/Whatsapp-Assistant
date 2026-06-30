@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   readAppVersionManifest,
+  parseVersion,
   type AppVersionManifest,
 } from '@finance-ai/shared/version'
 import {
@@ -35,6 +36,7 @@ export type VersionCheckResult = {
 
 type RemoteCache = {
   fetchedAt: number
+  localVersion: string
   manifest: AppVersionManifest | null
   error?: string
 }
@@ -57,13 +59,18 @@ async function fetchRemoteManifest(
   force: boolean,
 ): Promise<{ remote: AppVersionManifest | null; error?: string }> {
   const now = Date.now()
-  if (!force && remoteCache && now - remoteCache.fetchedAt < CACHE_TTL_MS) {
+  if (
+    !force &&
+    remoteCache &&
+    remoteCache.localVersion === local.version &&
+    now - remoteCache.fetchedAt < CACHE_TTL_MS
+  ) {
     return { remote: remoteCache.manifest, error: remoteCache.error }
   }
 
   const github = local.github
   if (!github?.owner || !github?.repo) {
-    remoteCache = { fetchedAt: now, manifest: null, error: 'no-github-config' }
+    remoteCache = { fetchedAt: now, localVersion: local.version, manifest: null, error: 'no-github-config' }
     return { remote: null, error: 'no-github-config' }
   }
 
@@ -79,11 +86,11 @@ async function fetchRemoteManifest(
       throw new Error(`HTTP ${response.status}`)
     }
     const remote = (await response.json()) as AppVersionManifest
-    remoteCache = { fetchedAt: now, manifest: remote }
+    remoteCache = { fetchedAt: now, localVersion: local.version, manifest: remote }
     return { remote }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    remoteCache = { fetchedAt: now, manifest: null, error: message }
+    remoteCache = { fetchedAt: now, localVersion: local.version, manifest: null, error: message }
     return { remote: null, error: message }
   }
 }
@@ -117,12 +124,44 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
     }
   }
 
+  const localParsed = parseVersion(local.version)
+  if (!localParsed) {
+    console.warn('[checkForUpdates] invalid local version', local.version)
+    return {
+      version: local.version,
+      appName: local.appName,
+      github: local.github,
+      updateAvailable: false,
+      latestVersion: null,
+      releaseNotes: null,
+      updateMethod: 'manual_download',
+      downloadUrl: local.github ? releasesPageUrl(local.github.owner, local.github.repo) : null,
+      checkedAt: checkedAt.toISOString(),
+      checkError: 'invalid-local-version',
+      bannerDismissed: false,
+      hasGitRepo: gitRepo,
+      canAutoUpdateOnRestart: false,
+      lastLocalUpdateAt: localUpdate?.updatedAt ?? settings.lastSuccessfulUpdateAt?.toISOString() ?? null,
+      lastLocalUpdateMethod: localUpdate?.method ?? null,
+    }
+  }
+
   const { remote, error } = await fetchRemoteManifest(local, Boolean(options?.force))
   const latestVersion = remote?.version ?? null
-  const updateAvailable =
-    latestVersion !== null && isUpdateAvailable(local.version, latestVersion)
+  const remoteParsed = latestVersion ? parseVersion(latestVersion) : null
 
-  if (options?.force || updateAvailable || error) {
+  let checkError = error
+  if (latestVersion && !remoteParsed) {
+    console.warn('[checkForUpdates] invalid remote version', latestVersion)
+    checkError = checkError ?? 'invalid-remote-version'
+  }
+
+  const updateAvailable =
+    latestVersion !== null &&
+    remoteParsed !== null &&
+    isUpdateAvailable(local.version, latestVersion)
+
+  if (options?.force || updateAvailable || checkError) {
     await settingsRepo.update({ lastUpdateCheckAt: checkedAt })
   }
 
@@ -131,8 +170,8 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
     settings.dismissedUpdateVersion === latestVersion &&
     updateAvailable
 
-  const updateMethod = resolveUpdateMethod(error)
-  const canAutoUpdateOnRestart = !error && updateMethod !== 'manual_download'
+  const updateMethod = resolveUpdateMethod(checkError)
+  const canAutoUpdateOnRestart = !checkError && updateMethod !== 'manual_download'
 
   return {
     version: local.version,
@@ -144,7 +183,7 @@ export async function checkForUpdates(options?: { force?: boolean }): Promise<Ve
     updateMethod,
     downloadUrl: local.github ? releasesPageUrl(local.github.owner, local.github.repo) : null,
     checkedAt: checkedAt.toISOString(),
-    checkError: error,
+    checkError,
     bannerDismissed,
     hasGitRepo: gitRepo,
     canAutoUpdateOnRestart,
