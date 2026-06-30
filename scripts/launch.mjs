@@ -2,7 +2,6 @@
 import { spawn } from 'node:child_process'
 import { createWriteStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { autoUpdate } from './auto-update.mjs'
 import {
@@ -10,8 +9,9 @@ import {
   runDbGenerateSafe,
   stopStaleDevServer,
 } from './prisma-launcher.mjs'
+import { isUncPath, resolveAppRoot } from './resolve-app-root.mjs'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = resolveAppRoot(import.meta.url)
 const LOG_DIR = resolve(ROOT, 'logs')
 const LOG_FILE = resolve(LOG_DIR, 'launcher.log')
 const PORT = Number(process.env.PORT || 4000)
@@ -32,9 +32,20 @@ function log(message) {
   console.log(message)
 }
 
+function shouldUseShell(command) {
+  if (process.platform !== 'win32') return false
+  const lower = command.toLowerCase()
+  return !lower.endsWith('.cmd') && !lower.endsWith('.exe')
+}
+
 function run(command, args, opts = {}) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32', ...opts })
+    const child = spawn(command, args, {
+      cwd: ROOT,
+      stdio: 'inherit',
+      shell: shouldUseShell(command),
+      ...opts,
+    })
     child.on('exit', (code) => {
       if (code === 0) resolvePromise(undefined)
       else reject(new Error(`${command} ${args.join(' ')} exited with ${code}`))
@@ -48,6 +59,7 @@ function createLauncherEnv(extraEnv = {}) {
   return {
     ...process.env,
     ...extraEnv,
+    WA_APP_ROOT: ROOT,
     [pathKey]: `${NODE_BIN_DIR}${process.platform === 'win32' ? ';' : ':'}${currentPath}`,
   }
 }
@@ -140,7 +152,12 @@ function openBrowser(url) {
 }
 
 async function main() {
-  log('Launcher iniciado')
+  log(`App root: ${ROOT}${isUncPath(ROOT) ? ' (UNC)' : ''}`)
+  if (isUncPath(ROOT)) {
+    log(
+      'WARN: UNC path detected without WA_APP_ROOT. Run via Start WhatsApp Assistant.bat or copy to local disk.',
+    )
+  }
   checkNode()
 
   const updateResult = await autoUpdate()
@@ -190,7 +207,7 @@ async function main() {
   const dev = spawn(pnpm.command, pnpm.args, {
     cwd: ROOT,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: shouldUseShell(pnpm.command),
     env: createLauncherEnv({ PORT: String(PORT) }),
   })
 

@@ -5,13 +5,13 @@
  */
 import { createWriteStream, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { execSync } from 'node:child_process'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { resolveAppRoot } from './resolve-app-root.mjs'
 
 export const NODE_TARGET_VERSION = '20.18.0'
 export const NODE_MIN_MAJOR = 20
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = resolveAppRoot(import.meta.url)
 const TOOLS_DIR = join(ROOT, 'tools')
 const NODE_DIR = join(TOOLS_DIR, 'node')
 const LOG_DIR = join(ROOT, 'logs')

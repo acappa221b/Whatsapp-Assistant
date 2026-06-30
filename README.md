@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.5.2-rc20  
-**Fase:** RC-20 aba Logs + logging centralizado  
+**Versão:** 1.5.3-rc21  
+**Fase:** RC-21 suporte UNC no launcher Windows  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -169,6 +169,18 @@ Duplo-clique no `.bat` -> download automatico do Node portatil -> instalacao de 
 
 Em PCs corporativos, antivirus, proxy ou firewall podem atrasar o download inicial do Node.js. Se o launcher falhar, verifique `logs/launcher.log`.
 
+### Executando de pasta de rede (UNC)
+
+A partir da **RC-21**, o launcher suporta abrir o `.bat` diretamente em caminhos de rede, por exemplo `\\servidor\Comercial\Whatsapp-Assistant`. O `pushd` mapeia o UNC para uma letra de unidade temporária automaticamente.
+
+**Recomendado para produção:** copie o projeto para disco local (`C:\Users\...\WhatsApp-Assistant`). Rede pode ser lenta; SQLite e `node_modules` em UNC são menos estáveis.
+
+**Se ainda falhar:**
+
+1. Mapeie uma unidade manualmente: `net use W: \\SERVER\share\pasta`
+2. Abra **Configurações → Logs** e filtre erros com source **launcher**
+3. Exporte `.txt` para suporte
+
 ### O que fica só no seu computador
 
 - `tools/node/` — Node.js portátil (Windows, bootstrap automático)
@@ -213,7 +225,7 @@ A versão instalada aparece no topo do dashboard. Novas versões geram um banner
 
 ## Próximo passo
 
-**RC-20** entregou aba **Logs** em Configurações com filtro de erros, export para suporte e captura centralizada de eventos do servidor + launcher.
+**RC-21** corrigiu execução do launcher a partir de pastas de rede UNC no Windows (`pushd` + `WA_APP_ROOT`).
 
 ---
 
@@ -230,6 +242,7 @@ A versão instalada aparece no topo do dashboard. Novas versões geram um banner
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.5.3-rc21 | RC-21: suporte UNC no launcher Windows (pushd, WA_APP_ROOT, shell fix pnpm) |
 | 1.5.2-rc20 | RC-20: aba Logs em Configurações, logging centralizado, export .txt, filtro erros, launcher merge |
 | 1.5.1-rc19 | RC-19: bolha [Áudio] com transcrição, feedback salvamento API keys, edição PATCH provedores |
 | 1.5.0-rc18 | RC-18: version.json SSOT, barra de versao no topo, check GitHub, auto-update no launcher |

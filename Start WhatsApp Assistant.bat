@@ -1,9 +1,11 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0"
+REM pushd maps UNC to a drive letter (Z:) - required for CMD/pnpm cwd
+pushd "%~dp0"
+set "ROOT=%CD%\"
+set "WA_APP_ROOT=%CD%"
 title WhatsApp Assistant Launcher
 
-set "ROOT=%~dp0"
 set "LOCAL_NODE=%ROOT%tools\node\node.exe"
 
 REM local portable node already installed
@@ -38,9 +40,11 @@ if not "%EXIT_CODE%"=="0" (
   echo.
   pause
 )
+popd
 exit /b %EXIT_CODE%
 
 :run
+set "WA_APP_ROOT=%CD%"
 "%NODE_EXE%" "%ROOT%scripts\launch.mjs"
 set "EXIT_CODE=%ERRORLEVEL%"
 if not "%EXIT_CODE%"=="0" (
@@ -50,4 +54,5 @@ if not "%EXIT_CODE%"=="0" (
   echo.
 )
 pause
+popd
 exit /b %EXIT_CODE%

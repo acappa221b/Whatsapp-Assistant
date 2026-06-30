@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { execSync } from 'node:child_process'
+import { isUncPath, resolveAppRoot } from './resolve-app-root.mjs'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = resolveAppRoot(import.meta.url)
 
 function log(message) {
   console.log(message)
@@ -42,6 +42,11 @@ function readBranch() {
 }
 
 export async function autoUpdate() {
+  if (isUncPath(ROOT)) {
+    log('UNC path without drive mapping - skip auto-update')
+    return { updated: false, reason: 'unc-path' }
+  }
+
   const gitDir = join(ROOT, '.git')
   if (!existsSync(gitDir)) {
     log('No .git folder - skip auto-update (manual download mode)')

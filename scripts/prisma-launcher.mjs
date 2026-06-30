@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { execSync } from 'node:child_process'
+import { resolveAppRoot } from './resolve-app-root.mjs'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = resolveAppRoot(import.meta.url)
 const SCHEMA_PATH = resolve(ROOT, 'packages/database/prisma/schema.prisma')
 const MIGRATIONS_DIR = resolve(ROOT, 'packages/database/prisma/migrations')
 const databaseRequire = createRequire(resolve(ROOT, 'packages/database/package.json'))
