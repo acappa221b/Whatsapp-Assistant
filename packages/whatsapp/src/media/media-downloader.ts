@@ -136,6 +136,19 @@ export class MediaDownloader {
     })
   }
 
+  async downloadAudioFromRaw(
+    rawPayload: Record<string, unknown>,
+    input: DownloadMediaInput,
+  ): Promise<StoredMedia> {
+    const buffer = await this.downloadMediaBufferFromRaw(rawPayload, 'audio')
+    const fileName = input.fileName?.trim() || `${sanitizePathSegment(input.externalMessageId)}.ogg`
+    const mimeType = input.mimeType?.trim() || 'audio/ogg'
+    return this.saveRawMedia(buffer, mimeType, fileName, input.externalMessageId, {
+      ...input,
+      messageType: input.messageType ?? 'AUDIO',
+    })
+  }
+
   validateMimeType(
     mimeType: string | null | undefined,
     messageType: 'IMAGE' | 'DOCUMENT',
@@ -277,15 +290,32 @@ export class MediaDownloader {
     if (!rawMessage?.message) {
       throw new ValidationError(`Media source not found for message ${externalMessageId}`)
     }
+    return this.downloadMediaBufferFromMessage(rawMessage, mediaType)
+  }
 
+  private async downloadMediaBufferFromRaw(
+    rawPayload: Record<string, unknown>,
+    mediaType: 'image' | 'document' | 'audio',
+  ): Promise<Buffer> {
+    const rawMessage = rawPayload as import('../utils/baileys-message.util').RawBaileysMessage
+    if (!rawMessage?.message) {
+      throw new ValidationError('Raw payload does not contain downloadable media')
+    }
+    return this.downloadMediaBufferFromMessage(rawMessage, mediaType)
+  }
+
+  private async downloadMediaBufferFromMessage(
+    rawMessage: import('../utils/baileys-message.util').RawBaileysMessage,
+    mediaType: 'image' | 'document' | 'audio',
+  ): Promise<Buffer> {
     const mediaMessage =
       mediaType === 'image'
-        ? rawMessage.message.imageMessage
+        ? rawMessage.message!.imageMessage
         : mediaType === 'document'
-          ? rawMessage.message.documentMessage
-          : rawMessage.message.audioMessage ?? rawMessage.message.pttMessage
+          ? rawMessage.message!.documentMessage
+          : rawMessage.message!.audioMessage ?? rawMessage.message!.pttMessage
     if (!mediaMessage) {
-      throw new ValidationError(`Message ${externalMessageId} does not contain ${mediaType} media`)
+      throw new ValidationError(`Message does not contain ${mediaType} media`)
     }
 
     const { downloadContentFromMessage } = (await import('@whiskeysockets/baileys')) as {

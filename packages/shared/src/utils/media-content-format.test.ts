@@ -26,16 +26,22 @@ describe('media-content-format', () => {
       label: AUDIO_DISPLAY_LABEL,
       transcription: null,
       isTranscribed: false,
+      isFailed: false,
+      failureReason: null,
     })
     expect(parseAudioMessageContent('[ÁUDIO] oi tudo bem')).toEqual({
       label: AUDIO_DISPLAY_LABEL,
       transcription: 'oi tudo bem',
       isTranscribed: true,
+      isFailed: false,
+      failureReason: null,
     })
     expect(parseAudioMessageContent('[audio] teste')).toEqual({
       label: AUDIO_DISPLAY_LABEL,
       transcription: 'teste',
       isTranscribed: true,
+      isFailed: false,
+      failureReason: null,
     })
   })
 })

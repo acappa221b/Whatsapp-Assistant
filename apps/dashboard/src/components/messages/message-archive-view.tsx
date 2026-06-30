@@ -28,6 +28,7 @@ type ArchiveMessage = {
   senderName: string
   content: string
   messageType: string
+  transcriptionStatus?: 'pending' | 'done' | 'failed' | 'none'
   receivedAt: string
   fromMe: boolean
 }
@@ -149,16 +150,32 @@ export function MessageArchiveView() {
     }
   }, [chats, selectedChatId])
 
+  const selectedChat = chats.find((chat) => chat.chatId === selectedChatId)
+  const hasPendingAudio =
+    Boolean(selectedChat?.audioProcessingEnabled) &&
+    messages.some(
+      (message) =>
+        message.messageType === 'AUDIO' &&
+        !message.fromMe &&
+        message.transcriptionStatus !== 'done' &&
+        message.transcriptionStatus !== 'failed',
+    )
+
   useEffect(() => {
     if (!selectedChatId) return
     stickToBottomRef.current = true
     void loadMessages(selectedChatId)
-    let interval = window.setInterval(() => void loadMessages(selectedChatId), 5000)
+
+    const pollMs = () => {
+      if (document.visibilityState !== 'visible') return 8000
+      return hasPendingAudio ? 3000 : 5000
+    }
+
+    let interval = window.setInterval(() => void loadMessages(selectedChatId), pollMs())
 
     const resetInterval = () => {
       window.clearInterval(interval)
-      const ms = document.visibilityState === 'visible' ? 5000 : 8000
-      interval = window.setInterval(() => void loadMessages(selectedChatId), ms)
+      interval = window.setInterval(() => void loadMessages(selectedChatId), pollMs())
     }
 
     document.addEventListener('visibilitychange', resetInterval)
@@ -166,7 +183,7 @@ export function MessageArchiveView() {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', resetInterval)
     }
-  }, [selectedChatId, loadMessages])
+  }, [selectedChatId, loadMessages, hasPendingAudio])
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -174,8 +191,25 @@ export function MessageArchiveView() {
     }
   }, [messages, scrollToBottom])
 
-  const selectedChat = chats.find((chat) => chat.chatId === selectedChatId)
   const isGroup = selectedChatId ? isGroupChat(selectedChatId) : false
+
+  async function retryTranscription(messageId: string) {
+    try {
+      const response = await fetch(`/api/whatsapp/messages/${messageId}/retry-transcription`, {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string }
+        setMessagesError(data.error ?? 'Falha ao tentar transcrever novamente')
+        return
+      }
+      if (selectedChatId) {
+        await loadMessages(selectedChatId)
+      }
+    } catch (error) {
+      setMessagesError(error instanceof Error ? error.message : 'Erro de rede')
+    }
+  }
 
   function handleSelectChat(chatId: string) {
     userSelectedChat.current = true
@@ -310,6 +344,10 @@ export function MessageArchiveView() {
                           content={message.content}
                           audioProcessingEnabled={selectedChat?.audioProcessingEnabled ?? false}
                           fromMe={message.fromMe}
+                          messageId={message.id}
+                          receivedAt={message.receivedAt}
+                          transcriptionStatus={message.transcriptionStatus}
+                          onRetry={(id) => void retryTranscription(id)}
                         />
                       ) : (
                         <p className="whitespace-pre-wrap break-words text-sm">{content}</p>

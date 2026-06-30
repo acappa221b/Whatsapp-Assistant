@@ -105,6 +105,12 @@ export class DeepseekUnifiedProvider extends OpenAiUnifiedProvider {
       model: creds.model ?? 'deepseek-chat',
     })
   }
+
+  async transcribeAudio(_filePath: string): Promise<UnifiedAiResult & { text: string }> {
+    return Promise.reject(
+      new Error('Use OpenAI Whisper for audio transcription — DeepSeek does not support Whisper'),
+    )
+  }
 }
 
 export class OpenAiCompatibleProvider extends OpenAiUnifiedProvider {}

@@ -18,6 +18,8 @@ import { getSettingsEncryptionSecret } from '@/lib/bootstrap/app-settings'
 const settingsRepo = new AppSettingsPrismaRepository(prisma)
 const providerRepo = new AiProviderConfigPrismaRepository(prisma)
 
+const TRANSCRIPTION_CAPABLE = new Set(['openai', 'custom'])
+
 async function encryptionSecret(): Promise<string> {
   return getSettingsEncryptionSecret()
 }
@@ -42,7 +44,49 @@ function capabilityProviderId(
   }
 }
 
+async function decryptProviderRow(
+  row: Awaited<ReturnType<AiProviderConfigPrismaRepository['findAll']>>[number],
+): Promise<ProviderCredentials | null> {
+  try {
+    const apiKey = decryptSecret(row.apiKeyEnc, await encryptionSecret())
+    return {
+      provider: row.provider,
+      apiKey,
+      model: row.model,
+      baseUrl: row.baseUrl,
+    }
+  } catch (error) {
+    console.error('[AiProvider] decrypt failed', { id: row.id, error })
+    return null
+  }
+}
+
+export async function resolveTranscriptionCredentials(): Promise<ProviderCredentials | null> {
+  const settings = await settingsRepo.get()
+  const providers = (await providerRepo.findAll()).filter((provider) => provider.enabled)
+
+  const preferred = settings.defaultTranscriptionProviderId
+    ? providers.find((provider) => provider.id === settings.defaultTranscriptionProviderId)
+    : null
+
+  const candidates = [preferred, providers.find((provider) => provider.isDefault), ...providers].filter(
+    (provider, index, list) => provider && list.indexOf(provider) === index,
+  ) as typeof providers
+
+  for (const row of candidates) {
+    if (!TRANSCRIPTION_CAPABLE.has(row.provider)) continue
+    const creds = await decryptProviderRow(row)
+    if (creds) return creds
+  }
+
+  return null
+}
+
 async function resolveCredentials(capability: AiCapability): Promise<ProviderCredentials | null> {
+  if (capability === 'transcription') {
+    return resolveTranscriptionCredentials()
+  }
+
   const settings = await settingsRepo.get()
   const providers = await providerRepo.findAll()
   const preferredId = capabilityProviderId(settings, capability)
@@ -52,17 +96,7 @@ async function resolveCredentials(capability: AiCapability): Promise<ProviderCre
     providers.find((p) => p.enabled)
 
   if (selected) {
-    try {
-      const apiKey = decryptSecret(selected.apiKeyEnc, await encryptionSecret())
-      return {
-        provider: selected.provider,
-        apiKey,
-        model: selected.model,
-        baseUrl: selected.baseUrl,
-      }
-    } catch (error) {
-      console.error('[AiProvider] decrypt failed', { id: selected.id, error })
-    }
+    return decryptProviderRow(selected)
   }
 
   return null
@@ -99,4 +133,4 @@ export async function createDailyReportProvider(): Promise<OpenAIDailyReportProv
   })
 }
 
-export { settingsRepo, providerRepo, encryptionSecret, encryptSecret }
+export { settingsRepo, providerRepo, encryptionSecret, encryptSecret, TRANSCRIPTION_CAPABLE }

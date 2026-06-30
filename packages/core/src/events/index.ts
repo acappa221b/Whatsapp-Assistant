@@ -38,6 +38,7 @@ export const DomainEvents = {
   UserCreated: 'UserCreated',
   UserUpdated: 'UserUpdated',
   TranscriptionCompleted: 'TranscriptionCompleted',
+  TranscriptionFailed: 'TranscriptionFailed',
   PhotoProcessingCompleted: 'PhotoProcessingCompleted',
 } as const
 

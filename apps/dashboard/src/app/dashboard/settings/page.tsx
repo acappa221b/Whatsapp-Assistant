@@ -287,7 +287,17 @@ function SettingsPageContent() {
                   ['defaultReportProviderId', 'Relatórios'],
                   ['defaultAssistantProviderId', 'Chat Assistente'],
                 ] as const
-              ).map(([field, label]) => (
+              ).map(([field, label]) => {
+                const transcriptionField = field === 'defaultTranscriptionProviderId'
+                const eligibleProviders = transcriptionField
+                  ? providers.filter((provider) => provider.provider === 'openai' || provider.provider === 'custom')
+                  : providers
+                const hasWhisperProvider = providers.some(
+                  (provider) =>
+                    provider.enabled && (provider.provider === 'openai' || provider.provider === 'custom'),
+                )
+
+                return (
                 <label key={field} className="text-sm">
                   <span className="mb-1 block text-muted-foreground">{label}</span>
                   <select
@@ -296,14 +306,19 @@ function SettingsPageContent() {
                     onChange={(e) => void updateDefault(field, e.target.value)}
                   >
                     <option value="">Primeiro habilitado</option>
-                    {providers.map((p) => (
+                    {eligibleProviders.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.displayName}
                       </option>
                     ))}
                   </select>
+                  {transcriptionField && !hasWhisperProvider ? (
+                    <p className="mt-1 text-xs text-amber-600">
+                      Transcricao de audio usa OpenAI Whisper. Cadastre um provedor OpenAI e selecione-o aqui.
+                    </p>
+                  ) : null}
                 </label>
-              ))}
+              )})}
             </CardContent>
           </Card>
         ) : null}

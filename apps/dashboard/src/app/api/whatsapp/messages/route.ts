@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import {
   resolveMessageDisplayContent,
   formatChatDisplayId,
+  getAudioTranscriptionStatus,
 } from '@finance-ai/shared/utils'
 import { ensureWhatsappReady, getChatIdentityResolver, getWhatsappRuntime } from '@/lib/whatsapp/runtime'
 import { mapRepositoryError } from '@/lib/api-error'
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
         senderName: identity.resolveSenderName({ senderName: message.senderName }),
         content: resolveMessageDisplayContent(message.content, message.messageType),
         messageType: message.messageType,
+        transcriptionStatus: getAudioTranscriptionStatus(message.content, message.messageType),
         fromMe: message.fromMe,
         mediaUrl: message.mediaUrl,
         mimeType: message.mimeType,

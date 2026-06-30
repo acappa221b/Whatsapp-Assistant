@@ -78,22 +78,20 @@ Limite: **25 MB** (limite OpenAI Whisper).
 
 | Variável | Descrição | Default |
 |----------|-----------|---------|
-| `OPENAI_API_KEY` | Obrigatória | — |
-| `WHISPER_MODEL` | Modelo | `whisper-1` |
-| `WHISPER_LANGUAGE` | ISO 639-1 | `pt` |
-| `WHISPER_MAX_DURATION_SEC` | Rejeitar áudios longos | `600` |
-| `WHISPER_ENABLED` | Kill switch | `true` |
+| Provedor OpenAI | Obrigatório em Configurações → Transcrição áudio | — |
+| `WHISPER_MODEL` | Modelo (via model do provedor) | `whisper-1` |
 
----
+**Importante (RC-23):** apenas provedores **OpenAI** ou **custom** (API compatível Whisper) são usados para transcrição. Gemini e DeepSeek são ignorados nessa função.
 
 ## Tratamento de erros
 
 | Cenário | Ação |
 |---------|------|
-| Download falhou | Retry 3x; mensagem permanece AUDIO sem transcrição |
-| Whisper 429 | Backoff exponencial; job na fila |
-| Áudio vazio/corrupto | Log + skip; não bloquear ingest |
-| API key ausente | Skip transcrição; log warning |
+| Download falhou | Retry via rawPayload; botão "Tentar novamente" na UI |
+| Provedor não Whisper | Conteúdo `[ÁUDIO_ERRO]` + mensagem em Configurações |
+| Whisper 429 | Log + estado erro; retry manual ou backfill |
+| Áudio vazio/corrupto | Log + skip; mensagem com erro amigável |
+| API key ausente | `[ÁUDIO_ERRO]`; aviso em Configurações → Provedores |
 
 ---
 

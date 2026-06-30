@@ -4,7 +4,8 @@ import { isUpdateAvailable, compareVersions } from './compare-update'
 describe('isUpdateAvailable', () => {
   it('returns true when remote is newer', () => {
     expect(isUpdateAvailable('1.6.0', '1.6.1')).toBe(true)
-    expect(isUpdateAvailable('1.6.0-rc22', '1.6.1-rc18b')).toBe(true)
+    expect(isUpdateAvailable('1.6.0-rc22', '1.6.1-rc18')).toBe(true)
+    expect(isUpdateAvailable('1.6.0-rc22', '1.6.0-rc23')).toBe(true)
   })
 
   it('returns false for same or older remote', () => {

@@ -1,4 +1,8 @@
 import type { PaginatedResult, PaginationInput } from '../../../events/index'
+import {
+  isAudioTranscriptionFailed,
+  isPendingAudioTranscription,
+} from '@finance-ai/shared/utils'
 import type { MessageType } from '../../../domain/value-objects/whatsapp-enums'
 import type { ChatArchiveSummary } from '../application/whatsapp-message.use-cases'
 import { WhatsappMessage } from '../domain/whatsapp-message.entity'
@@ -261,5 +265,35 @@ export class InMemoryWhatsappMessageRepository implements WhatsappMessageReposit
     const updated = message.withProcessedContent(content)
     this.store.set(id, updated)
     return updated
+  }
+
+  async updateStoragePath(id: string, storagePath: string): Promise<WhatsappMessage> {
+    const message = this.store.get(id)
+    if (!message) {
+      throw new Error(`WhatsappMessage not found: ${id}`)
+    }
+    const updated = message.withStoredMedia({ storagePath })
+    this.store.set(id, updated)
+    return updated
+  }
+
+  async findPendingAudioTranscriptions(options: {
+    chatId?: string
+    since: Date
+    limit: number
+    includeFailed?: boolean
+  }): Promise<WhatsappMessage[]> {
+    return [...this.store.values()]
+      .filter((message) => {
+        if (message.messageType !== 'AUDIO' || message.fromMe) return false
+        if (options.chatId && message.chatId !== options.chatId) return false
+        if (message.receivedAt.getTime() < options.since.getTime()) return false
+        if (isAudioTranscriptionFailed(message.content)) {
+          return options.includeFailed ?? false
+        }
+        return isPendingAudioTranscription(message.content)
+      })
+      .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
+      .slice(0, options.limit)
   }
 }

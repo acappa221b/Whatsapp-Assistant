@@ -43,7 +43,12 @@ export class MediaProcessingPipeline {
           chatId: payload.chatId,
           messageId: payload.messageId,
         })
-        await this.onAudioProcessing?.(payload.messageId, payload.chatId)
+        void this.onAudioProcessing?.(payload.messageId, payload.chatId).catch((error) => {
+          console.error('[MediaProcessing] audio failed', {
+            messageId: payload.messageId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
       }
     })
   }

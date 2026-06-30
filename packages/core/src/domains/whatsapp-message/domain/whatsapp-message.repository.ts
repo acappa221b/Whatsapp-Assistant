@@ -38,4 +38,11 @@ export type WhatsappMessageRepository = {
   findByChatIdInRange(chatId: string, start: Date, end: Date): Promise<WhatsappMessage[]>
   markSourceAgent(id: string): Promise<void>
   updateContent(id: string, content: string): Promise<WhatsappMessage>
+  updateStoragePath(id: string, storagePath: string): Promise<WhatsappMessage>
+  findPendingAudioTranscriptions(options: {
+    chatId?: string
+    since: Date
+    limit: number
+    includeFailed?: boolean
+  }): Promise<WhatsappMessage[]>
 }

@@ -12,7 +12,7 @@ import {
 } from '@finance-ai/core/domains/agent-chat'
 import { RecordApiTokenUsageUseCase } from '@finance-ai/core/domains/api-token-usage'
 import { MediaProcessingPipeline } from '@finance-ai/core/domains/message-processing'
-import { TranscribeAudioUseCase } from '@finance-ai/core/domains/audio-transcription'
+import { TranscribeAudioUseCase, RetryPendingAudioTranscriptionsUseCase } from '@finance-ai/core/domains/audio-transcription'
 import { ProcessPhotoUseCase } from '@finance-ai/core/domains/photo-processing'
 import type { AgentChatProvider } from '@finance-ai/core/domains/agent-chat'
 import { MediaDownloader } from '@finance-ai/whatsapp/media'
@@ -137,6 +137,8 @@ const globalForWhatsapp = globalThis as unknown as {
   whatsappStatusListeners?: Set<StatusListener>
   whatsappPipelinesRegistered?: boolean
   whatsappBootstrapPromise?: Promise<void>
+  transcribeAudioUseCase?: TranscribeAudioUseCase
+  retryPendingAudioTranscriptionsUseCase?: RetryPendingAudioTranscriptionsUseCase
   whatsappOperational?: {
     sessionLoaded: boolean
     lastMessageAt: Date | null
@@ -248,6 +250,7 @@ function createRuntime(): WhatsappRuntime {
   }
 
   let nameBootstrapDone = false
+  let audioRetryDone = false
 
   const chatMediaStorage = new ChatMediaStorage()
   const resolveChatNamesUseCase = new ResolveChatNamesUseCase(
@@ -279,6 +282,15 @@ function createRuntime(): WhatsappRuntime {
     })
     if (repair.contentRepaired > 0 || repair.chatsRenamed > 0) {
       console.info('[RC-07/repair-historical]', repair)
+    }
+    if (!audioRetryDone) {
+      audioRetryDone = true
+      const retryUseCase = globalForWhatsapp.retryPendingAudioTranscriptionsUseCase
+      if (retryUseCase) {
+        void retryUseCase.execute().catch((error) => {
+          console.error('[RetryPendingAudioTranscriptions] failed on connect', error)
+        })
+      }
     }
   }
 
@@ -354,6 +366,8 @@ function invalidateRuntimeCache(reason: string, health?: RuntimeHealth): void {
   globalForWhatsapp.whatsappRuntimeVersion = undefined
   globalForWhatsapp.whatsappPipelinesRegistered = false
   globalForWhatsapp.whatsappBootstrapPromise = undefined
+  globalForWhatsapp.transcribeAudioUseCase = undefined
+  globalForWhatsapp.retryPendingAudioTranscriptionsUseCase = undefined
 }
 
 function needsRuntimeRebuild(): boolean {
@@ -467,7 +481,7 @@ function ensureWhatsappPipelinesRegistered(): void {
     {
       transcribeAudio: async (filePath) => {
         const provider = await getUnifiedProvider('transcription')
-        if (!provider) throw new Error('Transcription provider not configured')
+        if (!provider) throw new Error('Transcription provider not configured — use OpenAI Whisper')
         const result = await provider.transcribeAudio(filePath)
         return {
           text: result.text,
@@ -480,6 +494,12 @@ function ensureWhatsappPipelinesRegistered(): void {
     recordTokenUsage,
     runtime.eventBus,
   )
+  const retryPendingAudioTranscriptionsUseCase = new RetryPendingAudioTranscriptionsUseCase(
+    runtime.messageRepository,
+    transcribeAudioUseCase,
+  )
+  globalForWhatsapp.transcribeAudioUseCase = transcribeAudioUseCase
+  globalForWhatsapp.retryPendingAudioTranscriptionsUseCase = retryPendingAudioTranscriptionsUseCase
   const processPhotoUseCase = new ProcessPhotoUseCase(
     runtime.chatConfigRepository,
     runtime.messageRepository,

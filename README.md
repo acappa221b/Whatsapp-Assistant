@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.6.1-rc18b  
-**Fase:** RC-18B auto-update Git + ZIP no launcher  
+**Versão:** 1.6.1-rc23  
+**Fase:** RC-23 transcrição áudio (Whisper-only, retry, UI erro)  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -252,11 +252,19 @@ Por padrão, **grupos e agenda não sincronizam** automaticamente. Chats entram 
 - **Permissões → Limpar chats sem mensagem** — remove centenas de entradas órfãs de sync antigo
 - Filtro **Com mensagem** (default) oculta configs sem histórico
 
+### Transcrição de áudio (RC-23)
+
+Requer **OpenAI Whisper** — em **Configurações → Provedores IA → Provedor por função → Transcrição áudio**, selecione um provedor OpenAI (Gemini não transcreve áudio).
+
+- Áudios novos são transcritos automaticamente quando **Áudio** está habilitado em Permissões
+- Se falhar, a bolha mostra erro amigável e **Tentar novamente**
+- Ao habilitar Áudio em um chat, áudios recentes pendentes são reprocessados
+
 ---
 
 ## Próximo passo
 
-**RC-18B** completa a atualizacao automatica para instalacoes ZIP e Git no launcher. Feche e reabra o `.bat` para receber novas versoes.
+**RC-23** corrige transcrição de áudio: use OpenAI Whisper em Configurações e habilite **Áudio** em Permissões para cada chat.
 
 ---
 
@@ -273,6 +281,7 @@ Por padrão, **grupos e agenda não sincronizam** automaticamente. Chats entram 
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.6.1-rc23 | RC-23: transcrição áudio Whisper-only, retry/backfill, UI erro/retry |
 | 1.6.1-rc18b | RC-18B: auto-update ZIP overlay + Git no launcher, dados preservados, banner/Sobre |
 | 1.6.0-rc22 | RC-22A: sync message-driven, sem grupos/agenda auto, prune orfaos, permissoes paginadas |
 | 1.5.3-rc21 | RC-21: suporte UNC no launcher Windows (pushd, WA_APP_ROOT, shell fix pnpm) |

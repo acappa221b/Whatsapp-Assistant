@@ -8,6 +8,10 @@ import type { WhatsappMessage } from '@finance-ai/core/domains/whatsapp-message'
 import type { ChatArchiveSummary } from '@finance-ai/core/domains/whatsapp-message'
 import type { MessageFidelityMetrics } from '@finance-ai/core/domains/whatsapp-message'
 import type { MessageType } from '@finance-ai/core/domain/value-objects/whatsapp-enums'
+import {
+  isAudioTranscriptionFailed,
+  isPendingAudioTranscription,
+} from '@finance-ai/shared/utils'
 import { WhatsappMessageMapper } from '../mappers/whatsapp-message.mapper'
 
 export class WhatsappMessagePrismaRepository implements WhatsappMessageRepository {
@@ -335,6 +339,54 @@ export class WhatsappMessagePrismaRepository implements WhatsappMessageRepositor
     }
     const updated = existing.withProcessedContent(content)
     return this.save(updated)
+  }
+
+  async updateStoragePath(id: string, storagePath: string): Promise<WhatsappMessage> {
+    const existing = await this.findById(id)
+    if (!existing) {
+      throw new Error(`WhatsappMessage not found: ${id}`)
+    }
+    const updated = existing.withStoredMedia({ storagePath })
+    return this.save(updated)
+  }
+
+  async findPendingAudioTranscriptions(options: {
+    chatId?: string
+    since: Date
+    limit: number
+    includeFailed?: boolean
+  }): Promise<WhatsappMessage[]> {
+    const configs = await this.prisma.whatsappChatConfig.findMany({
+      where: {
+        archiveEnabled: true,
+        audioProcessingEnabled: true,
+        ...(options.chatId ? { chatId: options.chatId } : {}),
+      },
+      select: { chatId: true },
+    })
+    const chatIds = configs.map((config) => config.chatId)
+    if (chatIds.length === 0) return []
+
+    const records = await this.prisma.whatsappMessage.findMany({
+      where: {
+        messageType: 'AUDIO',
+        fromMe: false,
+        chatId: { in: chatIds },
+        receivedAt: { gte: options.since },
+      },
+      orderBy: { receivedAt: 'desc' },
+      take: Math.max(options.limit * 3, options.limit),
+    })
+
+    return records
+      .filter((record) => {
+        if (isAudioTranscriptionFailed(record.content)) {
+          return options.includeFailed ?? false
+        }
+        return isPendingAudioTranscription(record.content)
+      })
+      .slice(0, options.limit)
+      .map(WhatsappMessageMapper.toDomain)
   }
 
   private buildWhere(filters: WhatsappMessageListFilters) {

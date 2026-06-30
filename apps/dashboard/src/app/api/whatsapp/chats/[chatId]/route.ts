@@ -20,7 +20,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { chatId } = await context.params
     const decodedChatId = decodeURIComponent(chatId)
     const body = (await request.json()) as PatchBody
-    const { updateChatConfigUseCase } = getWhatsappRuntime()
+    const { updateChatConfigUseCase, chatConfigRepository } = getWhatsappRuntime()
+
+    const previous = await chatConfigRepository.findByChatId(decodedChatId)
 
     const updated = await updateChatConfigUseCase.execute(decodedChatId, {
       archiveEnabled: body.archiveEnabled,
@@ -30,6 +32,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       reportGenerationEnabled: body.reportGenerationEnabled,
       name: body.name,
     })
+
+    if (
+      previous &&
+      !previous.audioProcessingEnabled &&
+      updated.audioProcessingEnabled &&
+      updated.archiveEnabled
+    ) {
+      const globalForWhatsapp = globalThis as {
+        retryPendingAudioTranscriptionsUseCase?: {
+          execute(input?: { chatId?: string }): Promise<{ retried: number }>
+        }
+      }
+      void globalForWhatsapp.retryPendingAudioTranscriptionsUseCase
+        ?.execute({ chatId: decodedChatId })
+        .catch((error) => {
+          console.error('[whatsapp/chats/patch] audio retry failed', error)
+        })
+    }
 
     return NextResponse.json(
       serializeWhatsappChatConfigApi({
