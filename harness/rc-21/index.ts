@@ -16,6 +16,8 @@ export const Rc21Harness: Harness = {
       'docs/releases/rc-21-unc-launcher.md',
       'scripts/resolve-app-root.mjs',
       'scripts/resolve-app-root.test.mjs',
+      'scripts/spawn-process.mjs',
+      'scripts/spawn-process.test.mjs',
     ]) {
       if (!existsSync(join(ROOT, file))) errors.push(`Missing ${file}`)
     }
@@ -32,8 +34,13 @@ export const Rc21Harness: Harness = {
     if (!launch.includes('WA_APP_ROOT')) {
       errors.push('launch.mjs must pass WA_APP_ROOT in env')
     }
-    if (!launch.includes("endsWith('.cmd')")) {
-      errors.push('launch.mjs must avoid shell:true for .cmd')
+    if (!launch.includes('spawnProcess')) {
+      errors.push('launch.mjs must use spawnProcess for pnpm')
+    }
+
+    const spawnProcessFile = readFileSync(join(ROOT, 'scripts/spawn-process.mjs'), 'utf-8')
+    if (!spawnProcessFile.includes('cmd.exe')) {
+      errors.push('spawn-process.mjs must wrap .cmd via cmd.exe on Windows')
     }
     if (!launch.includes('App root:')) {
       errors.push('launch.mjs must log App root on boot')

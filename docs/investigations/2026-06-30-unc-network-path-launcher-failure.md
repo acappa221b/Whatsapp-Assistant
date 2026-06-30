@@ -47,7 +47,12 @@ ERR_PNPM_NO_PKG_MANIFEST No package.json found in C:\Windows
 1. Executar o `.bat` em `C:\Dev\...` — deve continuar funcionando
 2. `App root:` deve mostrar caminho local sem `(UNC)`
 
-## Se ainda falhar
+## Correção adicional (spawn EINVAL)
+
+RC-21 inicial usou `shell: false` para `.cmd`, o que causa `spawn EINVAL` no Windows (`.cmd` não é executável Win32).
+
+**Fix:** `scripts/spawn-process.mjs` invoca `.cmd`/`.bat` via `cmd.exe /d /s /c` com `cwd: ROOT` válido (local ou mapeado por `pushd`).
+
 
 - Mapear unidade: `net use W: \\SERVER\share\pasta`
 - Copiar para disco local (recomendado para produção)

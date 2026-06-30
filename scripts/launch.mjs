@@ -10,6 +10,7 @@ import {
   stopStaleDevServer,
 } from './prisma-launcher.mjs'
 import { isUncPath, resolveAppRoot } from './resolve-app-root.mjs'
+import { spawnProcess } from './spawn-process.mjs'
 
 const ROOT = resolveAppRoot(import.meta.url)
 const LOG_DIR = resolve(ROOT, 'logs')
@@ -32,20 +33,14 @@ function log(message) {
   console.log(message)
 }
 
-function shouldUseShell(command) {
-  if (process.platform !== 'win32') return false
-  const lower = command.toLowerCase()
-  return !lower.endsWith('.cmd') && !lower.endsWith('.exe')
-}
-
 function run(command, args, opts = {}) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, {
+    const child = spawnProcess(command, args, {
       cwd: ROOT,
       stdio: 'inherit',
-      shell: shouldUseShell(command),
       ...opts,
     })
+    child.on('error', (error) => reject(error))
     child.on('exit', (code) => {
       if (code === 0) resolvePromise(undefined)
       else reject(new Error(`${command} ${args.join(' ')} exited with ${code}`))
@@ -204,10 +199,9 @@ async function main() {
 
   log(`Starting server on port ${PORT}...`)
   const pnpm = getPnpmCommand(['--filter', '@finance-ai/dashboard', 'dev'])
-  const dev = spawn(pnpm.command, pnpm.args, {
+  const dev = spawnProcess(pnpm.command, pnpm.args, {
     cwd: ROOT,
     stdio: 'inherit',
-    shell: shouldUseShell(pnpm.command),
     env: createLauncherEnv({ PORT: String(PORT) }),
   })
 
