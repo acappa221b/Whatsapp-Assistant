@@ -55,6 +55,7 @@ export async function GET() {
         lastMessageAt: chat.lastMessageAt.toISOString(),
         lastMessagePreview: resolveMessagePreview(chat.lastMessagePreview, chat.lastMessageType),
         lastMessageType: chat.lastMessageType,
+        audioProcessingEnabled: chat.audioProcessingEnabled,
       })),
     })
   } catch (error) {

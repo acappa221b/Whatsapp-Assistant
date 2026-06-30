@@ -96,6 +96,7 @@ export class InMemoryWhatsappMessageRepository implements WhatsappMessageReposit
         lastMessageAt: latest.receivedAt,
         lastMessagePreview: latest.content,
         lastMessageType: latest.messageType,
+        audioProcessingEnabled: false,
       })
     }
 

@@ -5,15 +5,21 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { WhatsappConnectionPanel } from '@/components/whatsapp/whatsapp-connection-panel'
+import { AiTrainingTab } from '@/components/settings/ai-training/ai-training-tab'
+import { SettingsAboutSection } from '@/components/settings/settings-about-section'
+import { ProviderSettingsPanel } from '@/components/settings/provider-settings-panel'
+import { SettingsLogsTab } from '@/components/settings/settings-logs-tab'
 
-const TABS = ['geral', 'provedores', 'whatsapp', 'relatorios'] as const
+const TABS = ['geral', 'provedores', 'ia', 'whatsapp', 'relatorios', 'logs'] as const
 type TabId = (typeof TABS)[number]
 
 const TAB_LABELS: Record<TabId, string> = {
   geral: 'Geral',
   provedores: 'Provedores IA',
+  ia: 'IA',
   whatsapp: 'WhatsApp',
   relatorios: 'Relatórios',
+  logs: 'Logs',
 }
 
 type ProviderRow = {
@@ -49,13 +55,6 @@ type AppSettings = {
   reportTimezone: string
 }
 
-const PROVIDER_OPTIONS = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'custom', label: 'Compatível OpenAI' },
-] as const
-
 export default function SettingsPage() {
   return (
     <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Carregando configurações…</p>}>
@@ -74,13 +73,6 @@ function SettingsPageContent() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [pathsOpen, setPathsOpen] = useState(false)
-  const [form, setForm] = useState({
-    provider: 'openai',
-    displayName: '',
-    apiKey: '',
-    model: '',
-    baseUrl: '',
-  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -110,23 +102,6 @@ function SettingsPageContent() {
       setTab(tabParam as TabId)
     }
   }, [tabParam])
-
-  async function addProvider() {
-    if (!form.displayName.trim() || !form.apiKey.trim()) return
-    await fetch('/api/settings/providers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-    setForm({ provider: 'openai', displayName: '', apiKey: '', model: '', baseUrl: '' })
-    await load()
-  }
-
-  async function testProvider(id: string) {
-    const res = await fetch(`/api/settings/providers/${id}/test`, { method: 'POST' })
-    const data = (await res.json()) as { ok: boolean; sample?: string; error?: string }
-    window.alert(data.ok ? `Conexão OK: ${data.sample ?? ''}` : `Falha: ${data.error ?? 'erro'}`)
-  }
 
   async function patchSettings(payload: Partial<AppSettings>) {
     const res = await fetch('/api/settings', {
@@ -200,6 +175,7 @@ function SettingsPageContent() {
         </div>
 
         {tab === 'geral' && settings ? (
+          <>
           <Card className="border-border/60 bg-card/60">
             <CardHeader>
               <CardTitle className="text-base">Aplicativo</CardTitle>
@@ -212,6 +188,17 @@ function SettingsPageContent() {
                   value={settings.appName}
                   onChange={(e) => setSettings((s) => (s ? { ...s, appName: e.target.value } : s))}
                   onBlur={() => void patchSettings({ appName: settings.appName })}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-muted-foreground">Nome da empresa (modo empresa)</span>
+                <input
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                  value={settings.companyName}
+                  onChange={(e) =>
+                    setSettings((s) => (s ? { ...s, companyName: e.target.value } : s))
+                  }
+                  onBlur={() => void patchSettings({ companyName: settings.companyName })}
                 />
               </label>
               <label className="text-sm">
@@ -262,87 +249,20 @@ function SettingsPageContent() {
               </div>
             </CardContent>
           </Card>
+          <Card className="border-border/60 bg-card/60">
+            <CardHeader>
+              <CardTitle className="text-base">Sobre</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SettingsAboutSection />
+            </CardContent>
+          </Card>
+          </>
         ) : null}
 
         {tab === 'provedores' ? (
         <>
-        <Card className="border-border/60 bg-card/60">
-          <CardHeader>
-            <CardTitle className="text-base">Adicionar provedor</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            <select
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-              value={form.provider}
-              onChange={(e) => setForm((f) => ({ ...f, provider: e.target.value }))}
-            >
-              {PROVIDER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <input
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-              placeholder="Nome exibido"
-              value={form.displayName}
-              onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-            />
-            <input
-              className="rounded-md border bg-background px-3 py-2 text-sm md:col-span-2"
-              placeholder="API key"
-              type="password"
-              value={form.apiKey}
-              onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-            />
-            <input
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-              placeholder="Modelo (opcional)"
-              value={form.model}
-              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-            />
-            <input
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-              placeholder="Base URL (opcional)"
-              value={form.baseUrl}
-              onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-            />
-            <Button type="button" onClick={() => void addProvider()}>
-              Salvar provedor
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 bg-card/60">
-          <CardHeader>
-            <CardTitle className="text-base">Provedores cadastrados</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {providers.map((row) => (
-              <div
-                key={row.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
-              >
-                <div>
-                  <div className="font-medium">
-                    {row.displayName} ({row.provider})
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {row.apiKeyMasked} · {row.model ?? 'modelo padrão'}
-                  </div>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => void testProvider(row.id)}>
-                  Testar
-                </Button>
-              </div>
-            ))}
-            {!loading && providers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhum provedor cadastrado — adicione uma chave de API para habilitar IA.
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+        <ProviderSettingsPanel providers={providers} loading={loading} onReload={load} />
 
         {settings ? (
           <Card className="border-border/60 bg-card/60">
@@ -380,6 +300,8 @@ function SettingsPageContent() {
         ) : null}
         </>
         ) : null}
+
+        {tab === 'ia' ? <AiTrainingTab /> : null}
 
         {tab === 'whatsapp' ? (
           <>
@@ -445,6 +367,8 @@ function SettingsPageContent() {
             </CardContent>
           </Card>
         ) : null}
+
+        {tab === 'logs' ? <SettingsLogsTab /> : null}
       </div>
     </div>
   )

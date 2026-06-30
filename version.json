@@ -1,0 +1,11 @@
+{
+  "version": "1.5.2-rc20",
+  "appName": "WhatsApp Assistant",
+  "github": {
+    "owner": "acappa221b",
+    "repo": "Whatsapp-Assistant",
+    "branch": "main"
+  },
+  "releasedAt": "2026-06-30",
+  "releaseNotes": "Aba Logs em Configuracoes, logging centralizado, export para suporte"
+}

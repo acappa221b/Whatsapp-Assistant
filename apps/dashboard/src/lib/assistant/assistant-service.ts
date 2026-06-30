@@ -10,6 +10,12 @@ import {
 } from '@finance-ai/core/domains/assistant-ops'
 import { prisma, AssistantActionLogPrismaRepository } from '@finance-ai/database'
 import { getUnifiedProvider } from '@/lib/ai/ai-provider-service'
+import {
+  composeAgentPromptUseCase,
+  getCompanyName,
+  getDefaultPersona,
+  searchKnowledgeUseCase,
+} from '@/lib/ai-training/ai-training-service'
 import { ensureWhatsappReady, getWhatsappRuntime } from '@/lib/whatsapp/runtime'
 import { consumeActionToken, createActionToken } from './action-token-store'
 
@@ -30,6 +36,18 @@ export type AssistantChatResponse =
   | { phase: 'error'; message: string }
 
 let lastSendAt = 0
+
+async function buildAssistantSystemPrompt(query: string): Promise<string> {
+  const persona = await getDefaultPersona()
+  const knowledge = await searchKnowledgeUseCase.execute({ query, limit: 3 })
+  return composeAgentPromptUseCase.execute({
+    persona,
+    knowledgeContext: knowledge.contextText,
+    ownerStyleSamples: [],
+    usageContext: 'assistant_chat',
+    companyName: await getCompanyName(),
+  })
+}
 
 function extractJsonFromText(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]
@@ -70,9 +88,12 @@ async function parseWithLlm(
     throw new Error('Configure um provedor de IA em Configurações para usar o Chat IA.')
   }
 
+  const personaSystem = await buildAssistantSystemPrompt(message)
   const result = await provider.chatCompletion({
     system: [
-      'Você classifica pedidos do operador do WhatsApp Assistant.',
+      personaSystem,
+      '',
+      'TAREFA: classifique pedidos do operador do WhatsApp Assistant.',
       'Responda APENAS JSON válido com uma das ações:',
       '{ "action":"query", "question":"...", "sources":["reports"|"messages"|"both"] }',
       '{ "action":"send_message", "messageText":"..."|null, "composeInstruction":"..."|null, "targets":[...], "requiresConfirmation":true }',
@@ -121,8 +142,9 @@ async function handleSendMessage(
 
   const composer = new ComposeAssistantMessageUseCase({
     compose: async (instruction) => {
+      const system = await buildAssistantSystemPrompt(instruction)
       const result = await provider.chatCompletion({
-        system: 'Redija mensagens curtas e naturais para WhatsApp em português brasileiro. Sem markdown.',
+        system,
         user: `Instrução: ${instruction}`,
       })
       return result.text.trim()

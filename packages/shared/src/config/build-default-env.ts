@@ -1,14 +1,16 @@
 import { APP_DEFAULTS } from './app.defaults'
+import { readAppVersionManifest } from '../version/read-app-version'
 
 const ALLOWED_ENV_KEYS = new Set(['NODE_ENV', 'PORT', 'DATABASE_URL', 'CI', 'TZ', 'DOCKER_BUILD'])
 
 export function buildDefaultEnv(): Record<string, string> {
+  const manifest = readAppVersionManifest()
   return {
     NODE_ENV: 'development',
     PORT: String(APP_DEFAULTS.port),
     TZ: APP_DEFAULTS.timezone,
-    APP_NAME: APP_DEFAULTS.appName,
-    APP_VERSION: APP_DEFAULTS.appVersion,
+    APP_NAME: manifest.appName,
+    APP_VERSION: manifest.version,
     DATABASE_URL: `file:${APP_DEFAULTS.databaseRelativePath}`,
     OPENAI_API_KEY: '',
     OPENAI_MODEL: APP_DEFAULTS.openaiModel,

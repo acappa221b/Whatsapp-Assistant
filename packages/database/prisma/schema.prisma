@@ -257,6 +257,13 @@ enum AiProviderType {
   custom
 }
 
+enum AppLogLevel {
+  debug
+  info
+  warn
+  error
+}
+
 model AppSettings {
   id                               String   @id @default("default")
   appName                          String   @default("WhatsApp Assistant")
@@ -282,6 +289,9 @@ model AppSettings {
   defaultVisionProviderId          String?
   defaultReportProviderId          String?
   defaultAssistantProviderId       String?
+  updateCheckEnabled               Boolean  @default(true)
+  lastUpdateCheckAt                DateTime?
+  dismissedUpdateVersion           String?
   updatedAt                        DateTime @updatedAt
 }
 
@@ -317,5 +327,52 @@ model AssistantActionLog {
   message   String
   createdAt DateTime @default(now())
 
+  @@index([createdAt])
+}
+
+model AiPersonaProfile {
+  id                 String   @id @default("default")
+  usageMode          String   @default("personal")
+  presetId           String   @default("casual")
+  toneFormal         Int      @default(30)
+  responseLength     Int      @default(40)
+  useEmojis          Boolean  @default(true)
+  customInstructions String   @default("")
+  exampleReplies     Json     @default("[]")
+  behaviorFlags      Json     @default("{}")
+  salesPlaybook      String   @default("")
+  learnFromHistory   Boolean  @default(true)
+  historySampleLimit Int      @default(20)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model AiKnowledgeDocument {
+  id            String   @id @default(cuid())
+  title         String
+  type          String
+  status        String   @default("processing")
+  storagePath   String
+  useInAgent    Boolean  @default(true)
+  parsedContent Json?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([useInAgent])
+}
+
+model AppLog {
+  id        String      @id @default(cuid())
+  level     AppLogLevel
+  domain    String      @default("system")
+  message   String
+  metadata  String?
+  source    String      @default("app")
+  createdAt DateTime    @default(now())
+
+  @@index([level, createdAt])
+  @@index([domain, createdAt])
   @@index([createdAt])
 }

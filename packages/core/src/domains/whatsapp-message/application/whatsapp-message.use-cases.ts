@@ -145,6 +145,7 @@ export type ChatArchiveSummary = {
   lastMessageAt: Date
   lastMessagePreview: string
   lastMessageType: MessageType
+  audioProcessingEnabled: boolean
 }
 
 export class ListWhatsappChatArchiveUseCase {

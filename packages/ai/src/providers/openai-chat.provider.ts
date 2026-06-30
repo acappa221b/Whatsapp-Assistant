@@ -12,6 +12,7 @@ export type AgentReplyInput = {
   ownerStyleSamples: string[]
   recentContext: Array<{ role: 'user' | 'assistant'; content: string }>
   hasOwnerHistory: boolean
+  systemPrompt?: string
 }
 
 export type AgentReplyOutput = {
@@ -33,7 +34,7 @@ const AgentReplySchema = z.object({
   skipReason: z.string().optional(),
 })
 
-const SYSTEM_PROMPT = [
+const LEGACY_SYSTEM_PROMPT = [
   'Você responde mensagens de WhatsApp em nome do usuário (dono da conta).',
   'REGRAS:',
   '1. Se houver exemplos de mensagens do dono, imite tom, gírias, tamanho e estilo — não pareça robô.',
@@ -118,7 +119,7 @@ export class OpenAIChatProvider implements AgentChatProvider {
         const completion = await this.client.beta.chat.completions.parse({
           model: this.model,
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: input.systemPrompt?.trim() || LEGACY_SYSTEM_PROMPT },
             { role: 'user', content: buildUserPrompt(input) },
           ],
           response_format: responseFormat,

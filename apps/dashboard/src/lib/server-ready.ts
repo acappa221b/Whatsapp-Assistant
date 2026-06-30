@@ -12,6 +12,11 @@ export function ensureServerReady(): Promise<void> {
       applyConfigToProcessEnv(resolved)
       await validateRuntimeStartup(resolved)
       await bootstrapAppSettings()
+
+      const { installConsoleLogHook } = await import('@/lib/logging/console-hook')
+      const { initializeAppLogSink } = await import('@/lib/logging/app-log-sink')
+      installConsoleLogHook()
+      await initializeAppLogSink()
     })().catch((error) => {
       startupPromise = null
       throw error

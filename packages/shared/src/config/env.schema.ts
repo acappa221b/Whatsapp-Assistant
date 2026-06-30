@@ -26,7 +26,7 @@ export const EnvSchema = z.object({
   PORT: numberish.pipe(z.number().int().positive()).default(4000),
   TZ: z.string().min(1).default('America/Sao_Paulo'),
   APP_NAME: z.string().min(1).default('WhatsApp Assistant'),
-  APP_VERSION: z.string().min(1).default('1.4.0-rc14'),
+  APP_VERSION: z.string().min(1).default('0.0.0-dev'),
 
   DATABASE_URL: z.string().min(1),
 

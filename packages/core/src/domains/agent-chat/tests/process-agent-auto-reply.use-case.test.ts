@@ -102,6 +102,52 @@ describe('ProcessAgentAutoReplyUseCase', () => {
     })
   })
 
+  it('passes composed systemPrompt when training deps are configured', async () => {
+    const chatRepo = new InMemoryWhatsappChatConfigRepository()
+    const messageRepo = new InMemoryWhatsappMessageRepository()
+    const tracker = new AgentOutboundTracker()
+    await seedEnabledChat(chatRepo)
+
+    const generateReply = vi.fn().mockResolvedValue({
+      action: 'reply',
+      replyText: 'ok',
+      shouldDefer: false,
+    })
+    const composeAgentPrompt = {
+      execute: vi.fn().mockReturnValue('composed-system-prompt'),
+    }
+    const searchKnowledge = {
+      execute: vi.fn().mockResolvedValue({ contextText: 'KB', matchedDocuments: [] }),
+    }
+
+    const useCase = new ProcessAgentAutoReplyUseCase(
+      createDeps(chatRepo, messageRepo, tracker, {
+        agentChatProvider: { generateReply },
+        composeAgentPrompt,
+        searchKnowledge,
+        getPersona: async () => ({
+          id: 'default',
+          usageMode: 'personal',
+          presetId: 'casual',
+          toneFormal: 30,
+          responseLength: 40,
+          useEmojis: true,
+          customInstructions: '',
+          exampleReplies: [],
+          behaviorFlags: {},
+          salesPlaybook: '',
+          learnFromHistory: true,
+          historySampleLimit: 10,
+        }),
+      }),
+    )
+
+    await useCase.execute(createIncomingMessage('msg-compose', 'quanto custa?'))
+    expect(generateReply).toHaveBeenCalledWith(
+      expect.objectContaining({ systemPrompt: 'composed-system-prompt' }),
+    )
+  })
+
   it('defers and pauses agent on impossible question', async () => {
     const chatRepo = new InMemoryWhatsappChatConfigRepository()
     const messageRepo = new InMemoryWhatsappMessageRepository()

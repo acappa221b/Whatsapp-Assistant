@@ -4,6 +4,8 @@ import {
   formatPhotoContent,
   isTranscribedAudioContent,
   isProcessedPhotoContent,
+  parseAudioMessageContent,
+  AUDIO_DISPLAY_LABEL,
 } from '@finance-ai/shared/utils'
 
 describe('media-content-format', () => {
@@ -17,5 +19,23 @@ describe('media-content-format', () => {
     const content = formatPhotoContent('uma mesa com documentos', 'recibo')
     expect(content.startsWith('[FOTO]')).toBe(true)
     expect(isProcessedPhotoContent(content)).toBe(true)
+  })
+
+  it('parseAudioMessageContent normalizes prefixes', () => {
+    expect(parseAudioMessageContent('[audio]')).toEqual({
+      label: AUDIO_DISPLAY_LABEL,
+      transcription: null,
+      isTranscribed: false,
+    })
+    expect(parseAudioMessageContent('[ÁUDIO] oi tudo bem')).toEqual({
+      label: AUDIO_DISPLAY_LABEL,
+      transcription: 'oi tudo bem',
+      isTranscribed: true,
+    })
+    expect(parseAudioMessageContent('[audio] teste')).toEqual({
+      label: AUDIO_DISPLAY_LABEL,
+      transcription: 'teste',
+      isTranscribed: true,
+    })
   })
 })

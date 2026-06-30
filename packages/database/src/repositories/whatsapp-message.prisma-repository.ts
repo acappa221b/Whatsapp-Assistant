@@ -144,6 +144,7 @@ export class WhatsappMessagePrismaRepository implements WhatsappMessageRepositor
         lastMessageAt: group._max.receivedAt ?? latest?.receivedAt ?? new Date(0),
         lastMessagePreview: latest?.content ?? '',
         lastMessageType: (latest?.messageType ?? 'UNKNOWN') as MessageType,
+        audioProcessingEnabled: config?.audioProcessingEnabled ?? false,
       }
     })
 

@@ -20,7 +20,13 @@ import {
   createAgentChatProvider,
   getUnifiedProvider,
   hasAiProvider,
+  settingsRepo,
 } from '@/lib/ai/ai-provider-service'
+import {
+  composeAgentPromptUseCase,
+  getDefaultPersona,
+  searchKnowledgeUseCase,
+} from '@/lib/ai-training/ai-training-service'
 import {
   BackfillWhatsappMessageNamesUseCase,
   DeleteChatHistoryUseCase,
@@ -392,6 +398,13 @@ function ensureWhatsappPipelinesRegistered(): void {
     pauseAfterDeferral: pauseAfterDeferralUseCase,
     agentOutboundTracker,
     replyDeduplicator: agentReplyDeduplicator,
+    composeAgentPrompt: composeAgentPromptUseCase,
+    searchKnowledge: searchKnowledgeUseCase,
+    getPersona: getDefaultPersona,
+    getCompanyName: async () => {
+      const settings = await settingsRepo.get()
+      return settings.companyName?.trim() || undefined
+    },
   })
   const mediaDownloader = new MediaDownloader()
   const transcribeAudioUseCase = new TranscribeAudioUseCase(
@@ -507,7 +520,10 @@ export async function bootstrapWhatsappRuntime(): Promise<void> {
           try {
             await provider.connect()
           } catch (error) {
-            console.error('[whatsapp/bootstrap] auto-connect failed', error)
+            const { getAppLogger } = await import('@/lib/logging/app-log-sink')
+            getAppLogger().error('[whatsapp/bootstrap] auto-connect failed', {
+              error: error instanceof Error ? error.message : String(error),
+            })
           }
         })()
       })

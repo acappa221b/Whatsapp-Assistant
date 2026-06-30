@@ -1,4 +1,6 @@
 import { AppSidebar } from '@/components/layout/app-sidebar'
+import { AppVersionBar } from '@/components/layout/app-version-bar'
+import { UpdateAvailableBanner } from '@/components/layout/update-available-banner'
 import { WhatsappHeaderStatus } from '@/components/whatsapp/whatsapp-header-status'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -8,8 +10,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between border-b border-border/60 px-6 py-3">
           <p className="text-sm text-muted-foreground">WhatsApp Assistant</p>
-          <WhatsappHeaderStatus />
+          <div className="flex items-center gap-4">
+            <AppVersionBar />
+            <WhatsappHeaderStatus />
+          </div>
         </header>
+        <UpdateAvailableBanner />
         <main className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-4">{children}</main>
       </div>
     </div>

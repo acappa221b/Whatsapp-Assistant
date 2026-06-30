@@ -15,6 +15,7 @@
     "@finance-ai/core": "workspace:*",
     "@finance-ai/database": "workspace:*",
     "@finance-ai/shared": "workspace:*",
+    "@finance-ai/excel": "workspace:*",
     "@finance-ai/whatsapp": "workspace:*",
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",

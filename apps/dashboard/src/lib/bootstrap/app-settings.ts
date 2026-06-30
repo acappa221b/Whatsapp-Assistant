@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { prisma } from '@finance-ai/database'
+import { prisma, AiPersonaPrismaRepository } from '@finance-ai/database'
 import { APP_DEFAULTS, REPO_ROOT } from '@finance-ai/shared/config'
 
 let bootstrapDone = false
 let cachedEncryptionSecret: string | null = null
+const personaRepo = new AiPersonaPrismaRepository(prisma)
 
 async function ensureStorageDirs(): Promise<void> {
   const dirs = [
@@ -15,6 +16,7 @@ async function ensureStorageDirs(): Promise<void> {
     APP_DEFAULTS.backupPath,
     'logs',
     'storage',
+    'storage/training',
   ]
   for (const dir of dirs) {
     await mkdir(resolve(REPO_ROOT, dir), { recursive: true })
@@ -48,6 +50,7 @@ export async function bootstrapAppSettings(): Promise<void> {
   }
 
   cachedEncryptionSecret = row.settingsEncryptionSecret
+  await personaRepo.ensureDefault()
   bootstrapDone = true
 }
 

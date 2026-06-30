@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.4.2-rc16  
-**Fase:** RC-16 WhatsApp sync + diagnostics (linked devices)  
+**Versão:** 1.5.2-rc20  
+**Fase:** RC-20 aba Logs + logging centralizado  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -44,7 +44,7 @@ Assistente de memória conversacional via WhatsApp — captura, organização, i
 | `/dashboard` | Sumário |
 | `/dashboard/messages` | Mensagens (somente chats com `archiveEnabled`) |
 | `/dashboard/reports` | Relatórios diários |
-| `/dashboard/settings` | **Configurações** (geral, provedores IA, **WhatsApp**, relatórios) |
+| `/dashboard/settings` | **Configurações** (geral, provedores IA, **IA**, WhatsApp, relatórios, **Logs**) |
 
 Redirect: `/` → `/dashboard` · `/dashboard/chats` → `/dashboard/permissions` · `/dashboard/whatsapp` → `/dashboard/settings?tab=whatsapp`
 
@@ -59,6 +59,7 @@ Estes paths existem apenas na máquina de desenvolvimento — **nunca** entram n
 | `storage/whatsapp/` | Sessão Baileys (`creds.json`, keys, sessions) |
 | `storage/media/` | Fotos, áudios e relatórios por chat |
 | `storage/temp/` | Arquivos temporários |
+| `storage/training/` | Documentos de treinamento IA (uploads) |
 | `packages/database/prisma/dev.db` | Banco SQLite com mensagens |
 | `backups/` | Backups locais |
 | `logs/` | Logs do launcher |
@@ -193,15 +194,33 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
+## Como atualizar
+
+Se você clonou do GitHub com Git instalado, **feche o programa e abra de novo** `Start WhatsApp Assistant.bat` — o launcher faz `git pull` automaticamente.
+
+Se baixou ZIP, baixe a nova versão no [GitHub](https://github.com/acappa221b/Whatsapp-Assistant/releases) e copie por cima (mantenha a pasta `storage/`).
+
+A versão instalada aparece no topo do dashboard. Novas versões geram um banner com instruções.
+
+### Ver logs e pedir ajuda (RC-20)
+
+1. Abra **Configurações → Logs**
+2. Se algo falhou, use **Somente erros**
+3. Clique **Exportar .txt** e envie o arquivo para quem está te ajudando
+4. Logs do `Start WhatsApp Assistant.bat` aparecem com etiqueta **launcher**
+
+---
+
 ## Próximo passo
 
-**RC-14** entregou UI Mensagens estilo WhatsApp, zero `.env`, launcher e wizard de configuração.
+**RC-20** entregou aba **Logs** em Configurações com filtro de erros, export para suporte e captura centralizada de eventos do servidor + launcher.
 
 ---
 
 ## Limitações atuais
 
-- Auto-reply apenas mensagens TEXT (IMAGE/AUDIO ignorados em v1)
+- Busca na KB por palavras-chave (sem embeddings/pgvector na v1)
+- Persona global apenas (override por chat = v1.1)
 - DELETE histórico não remove embeddings/RAG (futuro)
 - Sem autenticação multi-usuário
 
@@ -211,6 +230,10 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.5.2-rc20 | RC-20: aba Logs em Configurações, logging centralizado, export .txt, filtro erros, launcher merge |
+| 1.5.1-rc19 | RC-19: bolha [Áudio] com transcrição, feedback salvamento API keys, edição PATCH provedores |
+| 1.5.0-rc18 | RC-18: version.json SSOT, barra de versao no topo, check GitHub, auto-update no launcher |
+| 1.5.0-rc17 | RC-17: aba IA (persona, KB excel/texto/imagem, simulador), ComposeAgentPrompt, integração auto-reply + Chat IA |
 | 1.4.2-rc16 | RC-16: sync chats ao conectar, diagnostics WhatsApp, fix messages.upsert type, banners iPhone/linked device |
 | 1.4.1-rc15 | RC-15: scroll dashboard, custos estimados, sort #N, WhatsApp em Configuracoes, fix agent multimidia e Chat IA |
 | 1.4.0-rc14 | RC-14: mensagens estilo WhatsApp, zero `.env`, launcher, config no dashboard |

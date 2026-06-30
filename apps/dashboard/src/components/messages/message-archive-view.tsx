@@ -5,6 +5,7 @@ import { Send } from 'lucide-react'
 import { resolveMessageDisplayContent, formatChatListLabel } from '@finance-ai/shared/utils'
 import { shouldStickToBottom } from '@/lib/messages/message-scroll'
 import { Button } from '@/components/ui/button'
+import { AudioMessageBubble } from '@/components/messages/audio-message-bubble'
 
 type ChatSummary = {
   chatId: string
@@ -15,6 +16,7 @@ type ChatSummary = {
   lastMessageAt: string
   lastMessagePreview: string
   lastMessageType: string
+  audioProcessingEnabled: boolean
 }
 
 type ArchiveMessage = {
@@ -274,8 +276,6 @@ export function MessageArchiveView() {
             ) : (
               messages.map((message) => {
                 const content = displayContent(message)
-                const isMediaOnly =
-                  message.messageType === 'AUDIO' || message.messageType === 'IMAGE'
                 return (
                   <div
                     key={message.id}
@@ -294,8 +294,12 @@ export function MessageArchiveView() {
                           {displaySenderName(message)}
                         </div>
                       ) : null}
-                      {isMediaOnly && !content.trim() ? (
-                        <span className="text-xs opacity-70">[{message.messageType}]</span>
+                      {message.messageType === 'AUDIO' ? (
+                        <AudioMessageBubble
+                          content={message.content}
+                          audioProcessingEnabled={selectedChat?.audioProcessingEnabled ?? false}
+                          fromMe={message.fromMe}
+                        />
                       ) : (
                         <p className="whitespace-pre-wrap break-words text-sm">{content}</p>
                       )}

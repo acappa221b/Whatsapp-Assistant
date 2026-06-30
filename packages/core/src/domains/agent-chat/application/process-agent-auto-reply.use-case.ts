@@ -1,3 +1,6 @@
+import type { ComposeAgentPromptUseCase } from '../../ai-training/application/compose-agent-prompt.use-case'
+import type { SearchKnowledgeUseCase } from '../../ai-training/application/search-knowledge.use-case'
+import type { AiPersonaProfile } from '../../ai-training/domain/ai-persona'
 import {
   DEFAULT_AGENT_DEFER_PHRASE,
   formatAgentOutbound,
@@ -27,6 +30,7 @@ export type AgentReplyInput = {
   ownerStyleSamples: string[]
   recentContext: Array<{ role: 'user' | 'assistant'; content: string }>
   hasOwnerHistory: boolean
+  systemPrompt?: string
 }
 
 export type AgentReplyOutput = {
@@ -62,6 +66,10 @@ export type ProcessAgentAutoReplyDeps = {
   pauseAfterDeferral: PauseAgentAfterDeferralUseCase
   agentOutboundTracker: AgentOutboundTracker
   replyDeduplicator: AgentReplyDeduplicator
+  composeAgentPrompt?: ComposeAgentPromptUseCase
+  searchKnowledge?: SearchKnowledgeUseCase
+  getPersona?: () => Promise<AiPersonaProfile>
+  getCompanyName?: () => Promise<string | undefined>
 }
 
 export class ProcessAgentAutoReplyUseCase {
@@ -189,7 +197,7 @@ export class ProcessAgentAutoReplyUseCase {
       fromMe: true,
     })
     const tracker = this.deps.agentOutboundTracker
-    const ownerStyleSamples = ownerMessages
+    let ownerStyleSamples = ownerMessages
       .map((entry) => entry.content.trim())
       .filter(
         (content) =>
@@ -197,7 +205,27 @@ export class ProcessAgentAutoReplyUseCase {
           !isLegacyAgentOutboundMessage(content) &&
           !tracker.isAgentContent(message.chatId, content),
       )
-      .slice(0, 20)
+
+    let systemPrompt: string | undefined
+    if (this.deps.composeAgentPrompt && this.deps.searchKnowledge && this.deps.getPersona) {
+      const persona = await this.deps.getPersona()
+      if (!persona.learnFromHistory) {
+        ownerStyleSamples = []
+      } else {
+        ownerStyleSamples = ownerStyleSamples.slice(0, persona.historySampleLimit)
+      }
+      const knowledge = await this.deps.searchKnowledge.execute({ query: incomingText, limit: 3 })
+      const companyName = this.deps.getCompanyName ? await this.deps.getCompanyName() : undefined
+      systemPrompt = this.deps.composeAgentPrompt.execute({
+        persona,
+        knowledgeContext: knowledge.contextText,
+        ownerStyleSamples,
+        usageContext: 'whatsapp_auto_reply',
+        companyName,
+      })
+    } else {
+      ownerStyleSamples = ownerStyleSamples.slice(0, 20)
+    }
 
     const result = await this.deps.agentChatProvider.generateReply({
       incomingMessage: incomingText,
@@ -206,6 +234,7 @@ export class ProcessAgentAutoReplyUseCase {
       ownerStyleSamples,
       recentContext,
       hasOwnerHistory: ownerStyleSamples.length > 0,
+      systemPrompt,
     })
 
     if (result.action === 'skip' || result.skipReason) {

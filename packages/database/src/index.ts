@@ -37,3 +37,19 @@ export type {
 } from './repositories/ai-provider-config.prisma-repository'
 export type { AiProviderType } from '@prisma/client'
 export { AssistantActionLogPrismaRepository } from './repositories/assistant-action-log.prisma-repository'
+export { AiPersonaPrismaRepository } from './repositories/ai-persona.prisma-repository'
+export type { AiPersonaRecord, UpdateAiPersonaInput } from './repositories/ai-persona.prisma-repository'
+export { AiKnowledgeDocumentPrismaRepository } from './repositories/ai-knowledge-document.prisma-repository'
+export type {
+  AiKnowledgeDocumentRecord,
+  CreateKnowledgeDocumentInput,
+  KnowledgeDocumentType,
+  KnowledgeDocumentStatus,
+} from './repositories/ai-knowledge-document.prisma-repository'
+export { AppLogPrismaRepository } from './repositories/app-log.prisma-repository'
+export type {
+  AppLogRecord,
+  AppendAppLogInput,
+  ListAppLogsQuery,
+  CountAppLogsQuery,
+} from './repositories/app-log.prisma-repository'

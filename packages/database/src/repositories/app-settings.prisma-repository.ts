@@ -25,6 +25,9 @@ export type AppSettingsRecord = {
   defaultVisionProviderId: string | null
   defaultReportProviderId: string | null
   defaultAssistantProviderId: string | null
+  updateCheckEnabled: boolean
+  lastUpdateCheckAt: Date | null
+  dismissedUpdateVersion: string | null
   updatedAt: Date
 }
 
@@ -48,6 +51,9 @@ export type UpdateAppSettingsInput = Partial<
     | 'defaultVisionProviderId'
     | 'defaultReportProviderId'
     | 'defaultAssistantProviderId'
+    | 'updateCheckEnabled'
+    | 'lastUpdateCheckAt'
+    | 'dismissedUpdateVersion'
   >
 >
 
@@ -99,6 +105,9 @@ export class AppSettingsPrismaRepository {
     defaultVisionProviderId: string | null
     defaultReportProviderId: string | null
     defaultAssistantProviderId: string | null
+    updateCheckEnabled: boolean
+    lastUpdateCheckAt: Date | null
+    dismissedUpdateVersion: string | null
     updatedAt: Date
   }): AppSettingsRecord {
     return { ...row }

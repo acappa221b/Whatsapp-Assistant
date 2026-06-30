@@ -12,3 +12,10 @@ export async function generateMonthlyWorkbook(_year: number, _month: number): Pr
 export async function generateYearWorkbook(_year: number): Promise<WorkbookResult> {
   throw new Error('generateYearWorkbook not implemented — see Epic 08 spec')
 }
+
+export {
+  parseExcelCatalog,
+  parseCsvCatalog,
+  catalogRowsToSearchText,
+  type CatalogRow,
+} from './parse-catalog'

@@ -8,7 +8,12 @@ describe('message-preview (RC-07)', () => {
 
   it('returns human fallback for empty TEXT', () => {
     expect(resolveMessagePreview('', 'TEXT')).toBe('Mensagem de texto')
-    expect(resolveMessagePreview(null, 'AUDIO')).toBe('[áudio]')
+    expect(resolveMessagePreview(null, 'AUDIO')).toBe('[Áudio]')
+  })
+
+  it('uses transcription for AUDIO preview when transcribed', () => {
+    expect(resolveMessagePreview('[ÁUDIO] oi tudo bem', 'AUDIO')).toBe('oi tudo bem')
+    expect(resolveMessagePreview('[audio]', 'AUDIO')).toBe('[Áudio]')
   })
 
   it('ignores unclassified placeholder', () => {

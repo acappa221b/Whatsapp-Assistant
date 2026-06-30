@@ -50,6 +50,7 @@ export function createIsolatedTestDatabase(): TestDatabase {
 }
 
 const RESET_ORDER = [
+  'AppLog',
   'AssistantActionLog',
   'AssistantConversation',
   'AiProviderConfig',

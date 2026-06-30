@@ -12,6 +12,7 @@ import {
   SOCKET_EVENT_NAMES,
 } from '../utils/baileys-reconnect'
 import { logRc07 } from '@finance-ai/shared/utils'
+import { getSharedAppLogger } from '@finance-ai/shared/logging'
 import { recordMessageReceived } from '../metrics/capture-metrics'
 import { logIncomingMessageDiscovery } from '../utils/group-discovery'
 import {
@@ -138,7 +139,9 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     } catch (error) {
       await this.teardownConnection()
       if (!this.isRecoverableSessionError(error)) {
-        console.error('[baileys] connect failed', error)
+        getSharedAppLogger().error('[baileys] connect failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
         throw error
       }
 

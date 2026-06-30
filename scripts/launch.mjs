@@ -4,6 +4,12 @@ import { createWriteStream, existsSync, mkdirSync, statSync, writeFileSync } fro
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { autoUpdate } from './auto-update.mjs'
+import {
+  needsPrismaGenerate,
+  runDbGenerateSafe,
+  stopStaleDevServer,
+} from './prisma-launcher.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const LOG_DIR = resolve(ROOT, 'logs')
@@ -137,6 +143,11 @@ async function main() {
   log('Launcher iniciado')
   checkNode()
 
+  const updateResult = await autoUpdate()
+  if (updateResult.updated) {
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+
   try {
     if (existsSync(COREPACK_EXE)) {
       execSync(`"${COREPACK_EXE}" prepare pnpm@9.15.0 --activate`, {
@@ -158,14 +169,21 @@ async function main() {
 
   ensureLocalPnpmShim()
 
-  if (needsInstall()) {
+  if (updateResult.updated || needsInstall()) {
     log('Installing dependencies (pnpm install)...')
     await runPnpm(['install'])
   }
 
   log('Applying migrations...')
+  await stopStaleDevServer(PORT, log)
   await runPnpm(['db:migrate'])
-  await runPnpm(['db:generate'])
+
+  if (updateResult.updated || needsPrismaGenerate()) {
+    log('Generating Prisma client...')
+    await runDbGenerateSafe(runPnpm, log)
+  } else {
+    log('Prisma client up to date — skipping db:generate')
+  }
 
   log(`Starting server on port ${PORT}...`)
   const pnpm = getPnpmCommand(['--filter', '@finance-ai/dashboard', 'dev'])

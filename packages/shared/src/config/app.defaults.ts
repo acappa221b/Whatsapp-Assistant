@@ -2,7 +2,6 @@ export const APP_DEFAULTS = {
   port: 4000,
   timezone: 'America/Sao_Paulo',
   appName: 'WhatsApp Assistant',
-  appVersion: '1.4.0-rc14',
   databaseRelativePath: 'packages/database/prisma/dev.db',
   whatsappSessionPath: 'storage/whatsapp',
   mediaStoragePath: 'storage/media',

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Route } from 'next'
 import { cn } from '@/lib/utils'
+import { useAppVersion } from '@/hooks/use-app-version'
 
 const NAV_ITEMS = [
   { href: '/dashboard/permissions', label: 'Permissões', accent: 'green' as const },
@@ -27,6 +28,7 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { data: versionInfo } = useAppVersion()
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-border/60 bg-card/40 backdrop-blur-sm">
@@ -58,7 +60,9 @@ export function AppSidebar() {
         })}
       </nav>
       <div className="border-t border-border/60 px-5 py-4">
-        <p className="text-xs text-muted-foreground">v1.4.1-rc15</p>
+        <p className="font-mono text-xs text-muted-foreground">
+          v{versionInfo?.version ?? '…'}
+        </p>
       </div>
     </aside>
   )

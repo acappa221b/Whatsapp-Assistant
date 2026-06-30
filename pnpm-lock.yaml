@@ -53,6 +53,9 @@ importers:
       '@finance-ai/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@finance-ai/excel':
+        specifier: workspace:*
+        version: link:../../packages/excel
       '@finance-ai/shared':
         specifier: workspace:*
         version: link:../../packages/shared

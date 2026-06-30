@@ -12,7 +12,7 @@ export const prisma =
         url: databaseUrl,
       },
     },
-    log: getConfig().app.nodeEnv === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: getConfig().app.nodeEnv === 'development' ? ['error', 'warn'] : ['error'],
   })
 
 if (getConfig().app.nodeEnv !== 'production') {
