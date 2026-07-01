@@ -19,6 +19,7 @@ export const Rc20Harness: Harness = {
       'apps/dashboard/src/instrumentation.ts',
       'apps/dashboard/src/lib/logging/console-hook.ts',
       'apps/dashboard/src/app/api/settings/logs/route.ts',
+      'apps/dashboard/src/app/api/settings/logs/export/route.ts',
       'apps/dashboard/src/components/settings/settings-logs-tab.tsx',
     ]) {
       if (!existsSync(join(ROOT, file))) errors.push(`Missing ${file}`)

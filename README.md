@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.0-rc25  
-**Fase:** RC-25 chat sort, dashboard IA costs, audio gate, multi-message  
+**Versão:** 1.7.1-rc26  
+**Fase:** RC-26 fresh clone Prisma bootstrap + logs API  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -105,6 +105,23 @@ pnpm db:migrate && pnpm db:generate
 ```
 
 Reinicie o dev server após `db:generate`. Se `db:generate` falhar com `EPERM`, pare o `pnpm dev` primeiro (o engine Prisma fica bloqueado). Ver [prisma-fromme-client-desync](docs/investigations/prisma-fromme-client-desync.md).
+
+### Erro após git pull / clone novo
+
+#### `@prisma/client did not initialize yet`
+
+1. Feche o servidor (Ctrl+C no terminal do `.bat`)
+2. Execute `Start WhatsApp Assistant.bat` novamente
+3. Se persistir, manualmente:
+
+```bash
+pnpm db:migrate
+pnpm db:generate
+```
+
+Se necessário, apague `apps/dashboard/.next` e rode o `.bat` de novo.
+
+O launcher (RC-26+) sempre executa `db:generate` após migrations e só abre o browser quando `/api/health/database` responde 200.
 
 ---
 
@@ -295,6 +312,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.1-rc26 | RC-26: Prisma generate em clone novo, API logs RC-20, health gate database |
 | 1.7.0-rc25 | RC-25: sort chats por recência, tooltip custo tokens, custos Chat IA, gate áudio Whisper, Multi Mensagem |
 | 1.6.2-rc24 | RC-24: parse versao rc18b, fim banner falso de update, cache localVersion |
 | 1.6.1-rc23 | RC-23: transcrição áudio Whisper-only, retry/backfill, UI erro/retry |

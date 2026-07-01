@@ -89,6 +89,14 @@ export function SettingsLogsTab() {
           if (!append) setItems([])
           return
         }
+        const contentType = res.headers.get('content-type') ?? ''
+        if (!contentType.includes('application/json')) {
+          setError(
+            'Resposta inválida do servidor. Verifique se o Prisma está configurado (rode o .bat novamente).',
+          )
+          if (!append) setItems([])
+          return
+        }
         const data = (await res.json()) as {
           items: LogItem[]
           hasMore: boolean

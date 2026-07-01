@@ -7,38 +7,38 @@ import { resolveAppRoot } from './resolve-app-root.mjs'
 const ROOT = resolveAppRoot(import.meta.url)
 const SCHEMA_PATH = resolve(ROOT, 'packages/database/prisma/schema.prisma')
 const MIGRATIONS_DIR = resolve(ROOT, 'packages/database/prisma/migrations')
+const GENERATED_CLIENT_INDEX = resolve(ROOT, 'node_modules/.prisma/client/index.js')
 const databaseRequire = createRequire(resolve(ROOT, 'packages/database/package.json'))
 
-function getPrismaClientEntry() {
-  try {
-    return databaseRequire.resolve('@prisma/client')
-  } catch {
-    return null
-  }
-}
-
-function getPrismaEnginePath() {
+export function getPrismaEnginePath() {
   try {
     return databaseRequire.resolve('.prisma/client/index')
   } catch {
+    if (existsSync(GENERATED_CLIENT_INDEX)) {
+      return GENERATED_CLIENT_INDEX
+    }
     return null
   }
 }
 
+/** True only when prisma generate has produced .prisma/client (not just @prisma/client npm package). */
+export function isGeneratedPrismaClientReady() {
+  const enginePath = getPrismaEnginePath()
+  return Boolean(enginePath && existsSync(enginePath))
+}
+
 export function prismaClientExists() {
-  return Boolean(getPrismaClientEntry() || getPrismaEnginePath())
+  return isGeneratedPrismaClientReady()
 }
 
 export function needsPrismaGenerate() {
-  if (!prismaClientExists()) return true
+  if (!isGeneratedPrismaClientReady()) return true
   if (!existsSync(SCHEMA_PATH)) return false
 
   const enginePath = getPrismaEnginePath()
-  const clientPath = getPrismaClientEntry()
-  const marker = enginePath ?? clientPath
-  if (!marker || !existsSync(marker)) return true
+  if (!enginePath || !existsSync(enginePath)) return true
 
-  const clientMtime = statSync(marker).mtimeMs
+  const clientMtime = statSync(enginePath).mtimeMs
   if (statSync(SCHEMA_PATH).mtimeMs > clientMtime) return true
 
   if (!existsSync(MIGRATIONS_DIR)) return false
@@ -130,10 +130,10 @@ export async function runDbGenerateSafe(runPnpm, log = console.log) {
     }
   }
 
-  if (prismaClientExists()) {
+  if (isGeneratedPrismaClientReady()) {
     log('')
-    log('AVISO: db:generate falhou, mas o Prisma Client ja esta instalado.')
-    log('Continuando. Se houver erro de banco, feche outros terminais Node e rode o .bat novamente.')
+    log('AVISO: db:generate falhou, mas engine gerado anteriormente existe. Continuando...')
+    log('Se houver erro de banco, feche outros terminais Node e rode o .bat novamente.')
     log('')
     return { ok: false, skipped: true, reason: isPrismaEpermError(lastError) ? 'eperm' : 'generate-failed' }
   }

@@ -109,6 +109,13 @@ export function DashboardAnalyticsView() {
         setError('Falha ao carregar métricas')
         return
       }
+      const contentType = response.headers.get('content-type') ?? ''
+      if (!contentType.includes('application/json')) {
+        setError(
+          'Resposta inválida do servidor. Verifique se o Prisma está configurado (rode o .bat novamente).',
+        )
+        return
+      }
       setMetrics((await response.json()) as DashboardMetrics)
     } catch {
       setError('Erro de rede ao carregar métricas')

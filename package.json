@@ -26,6 +26,7 @@
     "db:generate": "pnpm --filter @finance-ai/database db:generate",
     "db:migrate": "pnpm --filter @finance-ai/database db:migrate",
     "db:studio": "pnpm --filter @finance-ai/database db:studio",
+    "postinstall": "node scripts/postinstall.mjs",
     "launch": "node scripts/launch.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "prepare": "husky"

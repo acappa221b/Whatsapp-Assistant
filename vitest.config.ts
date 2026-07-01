@@ -16,6 +16,7 @@ export default defineConfig({
       'packages/**/src/**/*.test.ts',
       'packages/**/tests/**/*.test.ts',
       'apps/dashboard/src/**/*.test.ts',
+      'scripts/**/*.test.ts',
     ],
     testTimeout: 120_000,
     hookTimeout: 120_000,

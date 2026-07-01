@@ -14,7 +14,7 @@ out
 storage/
 !storage/.gitkeep
 backups/
-logs/
+/logs/
 tools/node/
 *.db
 *.db-journal

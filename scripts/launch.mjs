@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
 import { runAutoUpdate } from './update/index.mjs'
 import {
-  needsPrismaGenerate,
+  isGeneratedPrismaClientReady,
   runDbGenerateSafe,
   stopStaleDevServer,
 } from './prisma-launcher.mjs'
@@ -126,12 +126,15 @@ function needsInstall() {
   return nmMtime < Math.max(pkgMtime, lockMtime)
 }
 
-async function waitForHealth(port, timeoutMs = 120_000) {
+async function waitForReady(port, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`http://localhost:${port}/api/health`)
-      if (res.ok) return true
+      const [health, db] = await Promise.all([
+        fetch(`http://localhost:${port}/api/health`),
+        fetch(`http://localhost:${port}/api/health/database`),
+      ])
+      if (health.ok && db.ok) return true
     } catch {
       // retry
     }
@@ -196,11 +199,12 @@ async function main() {
   await stopStaleDevServer(PORT, log)
   await runPnpm(['db:migrate'])
 
-  if (updateResult.updated || needsPrismaGenerate()) {
-    log('Generating Prisma client...')
-    await runDbGenerateSafe(runPnpm, log)
-  } else {
-    log('Prisma client up to date — skipping db:generate')
+  log('Generating Prisma client...')
+  await runDbGenerateSafe(runPnpm, log)
+  if (!isGeneratedPrismaClientReady()) {
+    throw new Error(
+      'Prisma Client não foi gerado. Feche outros terminais Node e execute Start WhatsApp Assistant.bat novamente.',
+    )
   }
 
   log(`Starting server on port ${PORT}...`)
@@ -211,13 +215,14 @@ async function main() {
     env: createLauncherEnv({ PORT: String(PORT) }),
   })
 
-  const ready = await waitForHealth(PORT)
+  const ready = await waitForReady(PORT)
   if (ready) {
     const url = `http://localhost:${PORT}`
     log(`Server ready - opening ${url}`)
     openBrowser(url)
   } else {
-    log('Timed out waiting for /api/health - check server logs')
+    log('Timed out waiting for /api/health and /api/health/database')
+    log('Execute: pnpm db:migrate && pnpm db:generate — ou rode Start WhatsApp Assistant.bat novamente.')
   }
 
   dev.on('exit', (code) => {
