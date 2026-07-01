@@ -174,7 +174,6 @@ export class WhatsappChatConfig {
 
   applyHumanTakeover(now: Date = new Date()): WhatsappChatConfig {
     return this.update({
-      agentChatEnabled: false,
       agentPaused: true,
       agentPausedReason: 'human_takeover',
       agentPausedAt: now,

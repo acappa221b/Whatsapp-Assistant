@@ -28,14 +28,14 @@ describe('WhatsappChatConfig agent pause (RC-10)', () => {
     expect(updated.agentPausedAt).toBeNull()
   })
 
-  it('applyHumanTakeover disables agent and pauses', () => {
+  it('applyHumanTakeover pauses agent without disabling toggle', () => {
     const config = WhatsappChatConfig.create({
       chatId: '5511@s.whatsapp.net',
       archiveEnabled: true,
       agentChatEnabled: true,
     })
     const taken = config.applyHumanTakeover(new Date('2025-06-25T12:00:00Z'))
-    expect(taken.agentChatEnabled).toBe(false)
+    expect(taken.agentChatEnabled).toBe(true)
     expect(taken.agentPaused).toBe(true)
     expect(taken.agentPausedReason).toBe('human_takeover')
   })

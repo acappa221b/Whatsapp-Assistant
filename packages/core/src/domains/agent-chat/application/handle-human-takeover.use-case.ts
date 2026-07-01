@@ -7,7 +7,7 @@ export class HandleHumanTakeoverUseCase {
   async execute(chatId: string): Promise<void> {
     const existing = await this.repository.findByChatId(chatId.trim())
     if (!existing) return
-    if (!existing.agentChatEnabled && existing.agentPausedReason === 'human_takeover') return
+    if (existing.agentPaused && existing.agentPausedReason === 'human_takeover') return
     await this.repository.save(existing.applyHumanTakeover())
   }
 }

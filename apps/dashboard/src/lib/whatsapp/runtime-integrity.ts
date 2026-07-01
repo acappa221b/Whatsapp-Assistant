@@ -1,5 +1,5 @@
 /** Bump when WhatsappRuntime shape changes — invalidates stale global singleton. */
-export const WHATSAPP_RUNTIME_VERSION = 10
+export const WHATSAPP_RUNTIME_VERSION = 11
 
 export type RuntimeHealth = {
   valid: boolean

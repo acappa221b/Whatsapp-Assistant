@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.3-rc28  
-**Fase:** RC-28 outbound queue + permissions sync progress  
+**Versão:** 1.7.3-rc29  
+**Fase:** RC-29 agent auto-reply pipeline fix  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -293,6 +293,14 @@ Após ENTER, a caixa libera na hora. Mensagens entram numa fila e são enviadas 
 
 Ao conectar o WhatsApp, o banner mostra o progresso da sincronização. Chats novos surgem principalmente quando há mensagens (política message-driven, RC-22A).
 
+### Resposta IA — troubleshooting (RC-29)
+
+- **Testar resposta** em Configurações → IA valida só o modelo — não envia WhatsApp.
+- Envio real: mensagem inbound → pipeline → Baileys `sendMessage` + persistência local.
+- Se não responder após HMR/restart: verifique `/api/whatsapp/diagnostics` → `agentAutoReply.eventBusBound`.
+- Responder manualmente (composer em Mensagens) **pausa** a IA no chat; religue **Resposta IA** em Permissões para retomar.
+- Logs estruturados: Configurações → Logs, filtre `[AgentChat]`.
+
 ### Multi Mensagem (RC-25)
 
 Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo de ~2s entre envios para segurança (máx. 50 chats).
@@ -301,7 +309,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 ## Próximo passo
 
-**RC-28** entrega fila de envio no composer (Mensagens) e banner de progresso de sincronização em Permissões.
+**RC-29** corrige o pipeline de Resposta IA (re-bind do EventBus), persistência da mensagem do agente e diagnóstico em `/api/whatsapp/diagnostics`.
 
 ---
 
@@ -318,6 +326,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.3-rc29 | RC-29: fix auto-reply pipeline, persist outbound, agentPaused UI, diagnostics |
 | 1.7.3-rc28 | RC-28: fila de envio no composer, progresso de sync em Permissões, API sync-status |
 | 1.7.2-rc27 | RC-27: fix detecção Prisma client no layout pnpm (launcher não abortava após generate) |
 | 1.7.1-rc26 | RC-26: Prisma generate em clone novo, API logs RC-20, health gate database |

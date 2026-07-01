@@ -1,3 +1,4 @@
+export * from './application/agent-reply-diagnostics'
 export * from './application/agent-outbound-tracker'
 export * from './application/agent-reply-deduplicator'
 export * from './application/should-auto-reply-to-message'

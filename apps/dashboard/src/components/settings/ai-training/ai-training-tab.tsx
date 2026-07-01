@@ -465,6 +465,9 @@ export function AiTrainingTab() {
           <CardTitle className="text-base">Testar resposta</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Este teste não envia WhatsApp. Valida apenas o modelo e as regras de resposta.
+          </p>
           <div className="flex flex-wrap gap-2">
             <input
               className="min-w-[240px] flex-1 rounded-md border bg-background px-3 py-2 text-sm"

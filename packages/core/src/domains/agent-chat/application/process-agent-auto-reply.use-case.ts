@@ -1,3 +1,4 @@
+import { getSharedAppLogger } from '@finance-ai/shared/logging'
 import type { ComposeAgentPromptUseCase } from '../../ai-training/application/compose-agent-prompt.use-case'
 import type { SearchKnowledgeUseCase } from '../../ai-training/application/search-knowledge.use-case'
 import type { AiPersonaProfile } from '../../ai-training/domain/ai-persona'
@@ -15,6 +16,7 @@ import type { WhatsappMessage } from '../../whatsapp-message/domain/whatsapp-mes
 import type { WhatsappMessageRepository } from '../../whatsapp-message/domain/whatsapp-message.repository'
 import { AgentReplyDeduplicator } from './agent-reply-deduplicator'
 import { AgentOutboundTracker } from './agent-outbound-tracker'
+import { recordAgentReplyDecision } from './agent-reply-diagnostics'
 import { PauseAgentAfterDeferralUseCase } from './handle-human-takeover.use-case'
 import {
   shouldDeferInviteBeforeLLM,
@@ -60,6 +62,11 @@ export type ProcessAgentAutoReplyDeps = {
   messageRepository: WhatsappMessageRepository
   agentChatProvider: AgentChatProvider
   sendMessage: (message: AgentOutgoingMessage) => Promise<void>
+  persistOutbound?: (input: {
+    chatId: string
+    content: string
+    triggerMessageId?: string
+  }) => Promise<void>
   isWhatsappConnected: () => boolean
   hasOpenAIKey: () => boolean
   hasAiProvider?: () => boolean | Promise<boolean>
@@ -89,8 +96,20 @@ export class ProcessAgentAutoReplyUseCase {
     }
 
     const config = await this.deps.chatConfigRepository.findByChatId(message.chatId)
-    if (!config) return
-    if (!config.archiveEnabled || !config.agentChatEnabled || config.agentPaused) {
+    if (!config) {
+      this.logSkip(message.chatId, undefined, 'no-config')
+      return
+    }
+    if (!config.archiveEnabled) {
+      this.logSkip(message.chatId, config.displayNumber, 'archive-disabled')
+      return
+    }
+    if (!config.agentChatEnabled) {
+      this.logSkip(message.chatId, config.displayNumber, 'agent-disabled')
+      return
+    }
+    if (config.agentPaused) {
+      this.logSkip(message.chatId, config.displayNumber, 'agent-paused')
       return
     }
 
@@ -100,19 +119,11 @@ export class ProcessAgentAutoReplyUseCase {
       incomingText = message.content.trim()
     } else if (message.messageType === 'AUDIO') {
       if (!config.audioProcessingEnabled) {
-        console.info('[AgentChat] skip audio reply', {
-          chatId: message.chatId,
-          displayNumber: config.displayNumber,
-          reason: 'audio-processing-disabled',
-        })
+        this.logSkip(message.chatId, config.displayNumber, 'audio-processing-disabled')
         return
       }
       if (!isTranscribedAudioContent(message.content)) {
-        console.info('[AgentChat] skip audio reply', {
-          chatId: message.chatId,
-          displayNumber: config.displayNumber,
-          reason: 'not-transcribed-yet',
-        })
+        this.logSkip(message.chatId, config.displayNumber, 'not-transcribed-yet')
         return
       }
       incomingText = message.content.trim()
@@ -122,11 +133,7 @@ export class ProcessAgentAutoReplyUseCase {
         return
       }
       if (!isProcessedPhotoContent(message.content)) {
-        console.info('[AgentChat] skip photo reply', {
-          chatId: message.chatId,
-          displayNumber: config.displayNumber,
-          reason: 'not-processed-yet',
-        })
+        this.logSkip(message.chatId, config.displayNumber, 'not-processed-yet')
         return
       }
       incomingText = message.content.trim()
@@ -138,18 +145,12 @@ export class ProcessAgentAutoReplyUseCase {
       ? await this.deps.hasAiProvider()
       : this.deps.hasOpenAIKey()
     if (!hasProvider) {
-      console.warn('[AgentChat] AI provider ausente — auto-reply ignorado', {
-        chatId: message.chatId,
-        displayNumber: config.displayNumber,
-      })
+      this.logSkip(message.chatId, config.displayNumber, 'no-ai-provider')
       return
     }
 
     if (!this.deps.isWhatsappConnected()) {
-      console.warn('[AgentChat] WhatsApp desconectado — auto-reply ignorado', {
-        chatId: message.chatId,
-        displayNumber: config.displayNumber,
-      })
+      this.logSkip(message.chatId, config.displayNumber, 'whatsapp-disconnected')
       return
     }
 
@@ -179,11 +180,7 @@ export class ProcessAgentAutoReplyUseCase {
     const incomingForSkip = stripMediaPrefix(incomingText)
     const skipDecision = shouldSkipBeforeLLM(incomingForSkip, recentContext)
     if (skipDecision.skip) {
-      console.info('[AgentChat] skip', {
-        chatId: message.chatId,
-        displayNumber,
-        reason: skipDecision.reason,
-      })
+      this.logSkip(message.chatId, displayNumber, skipDecision.reason)
       return
     }
 
@@ -238,11 +235,7 @@ export class ProcessAgentAutoReplyUseCase {
     })
 
     if (result.action === 'skip' || result.skipReason) {
-      console.info('[AgentChat] skip', {
-        chatId: message.chatId,
-        displayNumber,
-        reason: result.skipReason ?? 'llm-skip',
-      })
+      this.logSkip(message.chatId, displayNumber, result.skipReason ?? 'llm-skip')
       return
     }
 
@@ -259,26 +252,60 @@ export class ProcessAgentAutoReplyUseCase {
     }
 
     const outbound = formatAgentOutbound(sanitized.text)
+    await this.deliverOutbound(message, displayNumber, outbound, 'sent')
+  }
+
+  private async deliverOutbound(
+    message: WhatsappMessage,
+    displayNumber: number,
+    outbound: string,
+    action: 'sent' | 'defer' | 'photo-pending',
+  ): Promise<void> {
+    const tracker = this.deps.agentOutboundTracker
     if (await this.deps.replyDeduplicator.isDuplicateReply(message.chatId, outbound)) {
-      console.info('[AgentChat] skip', {
-        chatId: message.chatId,
-        displayNumber,
-        reason: 'duplicate-reply',
-      })
+      this.logSkip(message.chatId, displayNumber, 'duplicate-reply')
       return
     }
 
     tracker.register(message.chatId, outbound)
-    await this.deps.sendMessage({
-      to: message.chatId,
-      content: outbound,
-      metadata: { source: 'agent-auto-reply', messageId: message.id },
-    })
-    console.info('[AgentChat] reply', {
-      chatId: message.chatId,
-      displayNumber,
-      action: 'sent',
-    })
+    try {
+      await this.deps.sendMessage({
+        to: message.chatId,
+        content: outbound,
+        metadata: { source: 'agent-auto-reply', messageId: message.id },
+      })
+      await this.deps.persistOutbound?.({
+        chatId: message.chatId,
+        content: outbound,
+        triggerMessageId: message.id,
+      })
+      const decisionAction = action === 'sent' || action === 'photo-pending' ? 'sent' : 'defer'
+      recordAgentReplyDecision({
+        chatId: message.chatId,
+        action: decisionAction,
+        reason: action,
+      })
+      getSharedAppLogger().info('[AgentChat] reply sent', {
+        chatId: message.chatId,
+        displayNumber,
+        action,
+        contentLength: outbound.length,
+      })
+    } catch (error) {
+      tracker.unregister(message.chatId, outbound)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      recordAgentReplyDecision({
+        chatId: message.chatId,
+        action: 'error',
+        reason: errorMessage,
+      })
+      getSharedAppLogger().error('[AgentChat] send failed', {
+        chatId: message.chatId,
+        displayNumber,
+        error: errorMessage,
+      })
+      throw error
+    }
   }
 
   private async sendFixedReply(
@@ -286,21 +313,8 @@ export class ProcessAgentAutoReplyUseCase {
     displayNumber: number,
     phrase: string,
   ): Promise<void> {
-    const tracker = this.deps.agentOutboundTracker
     const outbound = formatAgentOutbound(phrase)
-    if (await this.deps.replyDeduplicator.isDuplicateReply(message.chatId, outbound)) {
-      return
-    }
-    tracker.register(message.chatId, outbound)
-    await this.deps.sendMessage({
-      to: message.chatId,
-      content: outbound,
-      metadata: { source: 'agent-auto-reply', messageId: message.id },
-    })
-    console.info('[AgentChat] photo-pending-reply', {
-      chatId: message.chatId,
-      displayNumber,
-    })
+    await this.deliverOutbound(message, displayNumber, outbound, 'photo-pending')
   }
 
   private async sendDeferral(
@@ -308,19 +322,22 @@ export class ProcessAgentAutoReplyUseCase {
     displayNumber: number,
     phrase: string,
   ): Promise<void> {
-    const tracker = this.deps.agentOutboundTracker
     const outbound = formatAgentOutbound(phrase)
-    tracker.register(message.chatId, outbound)
-    await this.deps.sendMessage({
-      to: message.chatId,
-      content: outbound,
-      metadata: { source: 'agent-auto-reply', messageId: message.id },
-    })
+    await this.deliverOutbound(message, displayNumber, outbound, 'defer')
     await this.deps.pauseAfterDeferral.execute(message.chatId)
-    console.info('[AgentChat] defer', {
+    getSharedAppLogger().info('[AgentChat] defer', {
       chatId: message.chatId,
       displayNumber,
       action: 'paused',
+    })
+  }
+
+  private logSkip(chatId: string, displayNumber: number | undefined, reason: string): void {
+    recordAgentReplyDecision({ chatId, action: 'skip', reason })
+    getSharedAppLogger().info('[AgentChat] skip', {
+      chatId,
+      displayNumber,
+      reason,
     })
   }
 }

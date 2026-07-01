@@ -11,7 +11,7 @@ import {
   type ProviderCredentials,
   type UnifiedAiProvider,
 } from '@finance-ai/ai'
-import { OpenAIChatProvider, type TokenUsageCallback } from '@finance-ai/ai'
+import { OpenAIChatProvider, UnifiedAgentChatProvider, type TokenUsageCallback } from '@finance-ai/ai'
 import { OpenAIDailyReportProvider } from '@finance-ai/ai'
 import { getSettingsEncryptionSecret } from '@/lib/bootstrap/app-settings'
 
@@ -118,14 +118,17 @@ export async function getUnifiedProvider(capability: AiCapability): Promise<Unif
 
 export async function createAgentChatProvider(
   onTokenUsage?: TokenUsageCallback,
-): Promise<OpenAIChatProvider | null> {
+): Promise<OpenAIChatProvider | UnifiedAgentChatProvider | null> {
   const creds = await resolveCredentials('chat')
   if (!creds) return null
-  return new OpenAIChatProvider({
-    apiKey: creds.apiKey,
-    model: creds.model ?? config.openai.model,
-    onTokenUsage,
-  })
+  if (creds.provider === 'openai') {
+    return new OpenAIChatProvider({
+      apiKey: creds.apiKey,
+      model: creds.model ?? config.openai.model,
+      onTokenUsage,
+    })
+  }
+  return new UnifiedAgentChatProvider(creds, onTokenUsage)
 }
 
 export async function createDailyReportProvider(): Promise<OpenAIDailyReportProvider | null> {

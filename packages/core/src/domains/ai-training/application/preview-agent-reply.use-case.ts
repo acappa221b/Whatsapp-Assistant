@@ -1,4 +1,9 @@
 import type { AgentChatProvider, AgentReplyInput, AgentReplyOutput } from '../../agent-chat/application/process-agent-auto-reply.use-case'
+import { DEFAULT_AGENT_DEFER_PHRASE } from '@finance-ai/shared/utils'
+import {
+  shouldDeferInviteBeforeLLM,
+  shouldSkipBeforeLLM,
+} from '../../agent-chat/application/should-auto-reply-to-message'
 import { ComposeAgentPromptUseCase } from './compose-agent-prompt.use-case'
 import { SearchKnowledgeUseCase } from './search-knowledge.use-case'
 import type { AiPersonaProfile } from '../domain/ai-persona'
@@ -9,6 +14,7 @@ export type PreviewAgentReplyInput = {
   ownerStyleSamples?: string[]
   persona: AiPersonaProfile
   companyName?: string
+  simulateLiveGates?: boolean
 }
 
 export type PreviewAgentReplyResult = AgentReplyOutput & {
@@ -24,6 +30,30 @@ export class PreviewAgentReplyUseCase {
   ) {}
 
   async execute(input: PreviewAgentReplyInput): Promise<PreviewAgentReplyResult> {
+    if (input.simulateLiveGates) {
+      const skip = shouldSkipBeforeLLM(input.message, [])
+      if (skip.skip) {
+        return {
+          action: 'skip',
+          replyText: '',
+          shouldDefer: false,
+          skipReason: skip.reason,
+          systemPrompt: '',
+          matchedDocuments: [],
+        }
+      }
+      if (shouldDeferInviteBeforeLLM(input.message)) {
+        return {
+          action: 'defer',
+          replyText: '',
+          shouldDefer: true,
+          deferralPhrase: DEFAULT_AGENT_DEFER_PHRASE,
+          systemPrompt: '',
+          matchedDocuments: [],
+        }
+      }
+    }
+
     const knowledge = await this.searchKnowledge.execute({ query: input.message, limit: 3 })
     const ownerStyleSamples =
       input.persona.learnFromHistory && input.ownerStyleSamples

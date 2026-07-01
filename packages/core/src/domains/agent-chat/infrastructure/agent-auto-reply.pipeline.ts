@@ -1,3 +1,4 @@
+import { getSharedAppLogger } from '@finance-ai/shared/logging'
 import type { EventBus } from '@finance-ai/core/events'
 import { DomainEvents } from '@finance-ai/core/events'
 import { isLegacyAgentOutboundMessage } from '@finance-ai/shared/utils'
@@ -35,59 +36,76 @@ export class AgentAutoReplyPipeline {
     const unsubPersisted = this.eventBus.subscribe(
       DomainEvents.WhatsappMessagePersisted,
       async (event) => {
-        const payload = event.payload as WhatsappMessagePersistedPayload
-        const message = await this.messageRepository.findById(payload.messageId)
-        if (!message) return
+        try {
+          const payload = event.payload as WhatsappMessagePersistedPayload
+          const message = await this.messageRepository.findById(payload.messageId)
+          if (!message) return
 
-        if (message.fromMe) {
-          const isAgent =
-            isLegacyAgentOutboundMessage(message.content) ||
-            this.agentOutboundTracker.isAgentEcho(message.chatId, message.content)
-          if (isAgent) {
-            await this.messageRepository.markSourceAgent(message.id)
-          } else {
-            await this.humanTakeover.execute(message.chatId)
+          if (message.fromMe) {
+            const isAgent =
+              isLegacyAgentOutboundMessage(message.content) ||
+              this.agentOutboundTracker.isAgentEcho(message.chatId, message.content)
+            if (isAgent) {
+              await this.messageRepository.markSourceAgent(message.id)
+            } else {
+              await this.humanTakeover.execute(message.chatId)
+            }
+            return
           }
-          return
-        }
 
-        await this.processAgentAutoReply.execute(message)
+          await this.processAgentAutoReply.execute(message)
+        } catch (error) {
+          const payload = event.payload as WhatsappMessagePersistedPayload
+          getSharedAppLogger().error('[AgentChat] pipeline handler failed', {
+            messageId: payload.messageId,
+            chatId: payload.chatId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
       },
     )
 
     const onMediaCompleted = async (payload: MediaCompletedPayload) => {
-      const message = await this.messageRepository.findById(payload.messageId)
-      if (!message || message.fromMe) return
-      const content =
-        payload.content?.trim() && message.content.trim() !== payload.content.trim()
-          ? payload.content.trim()
-          : message.content
-      const enriched =
-        content !== message.content
-          ? WhatsappMessage.reconstitute({
-              id: message.id,
-              externalMessageId: message.externalMessageId,
-              chatId: message.chatId,
-              chatName: message.chatName,
-              sender: message.sender,
-              senderId: message.senderId,
-              senderName: message.senderName,
-              content,
-              messageType: message.messageType,
-              rawPayload: message.rawPayload,
-              mediaUrl: message.mediaUrl,
-              mimeType: message.mimeType,
-              fileName: message.fileName,
-              fileSize: message.fileSize,
-              storagePath: message.storagePath,
-              fromMe: message.fromMe,
-              sourceAgent: message.sourceAgent,
-              processed: message.processed,
-              receivedAt: message.receivedAt,
-              createdAt: message.createdAt,
-            })
-          : message
-      await this.processAgentAutoReply.execute(enriched)
+      try {
+        const message = await this.messageRepository.findById(payload.messageId)
+        if (!message || message.fromMe) return
+        const content =
+          payload.content?.trim() && message.content.trim() !== payload.content.trim()
+            ? payload.content.trim()
+            : message.content
+        const enriched =
+          content !== message.content
+            ? WhatsappMessage.reconstitute({
+                id: message.id,
+                externalMessageId: message.externalMessageId,
+                chatId: message.chatId,
+                chatName: message.chatName,
+                sender: message.sender,
+                senderId: message.senderId,
+                senderName: message.senderName,
+                content,
+                messageType: message.messageType,
+                rawPayload: message.rawPayload,
+                mediaUrl: message.mediaUrl,
+                mimeType: message.mimeType,
+                fileName: message.fileName,
+                fileSize: message.fileSize,
+                storagePath: message.storagePath,
+                fromMe: message.fromMe,
+                sourceAgent: message.sourceAgent,
+                processed: message.processed,
+                receivedAt: message.receivedAt,
+                createdAt: message.createdAt,
+              })
+            : message
+        await this.processAgentAutoReply.execute(enriched)
+      } catch (error) {
+        getSharedAppLogger().error('[AgentChat] pipeline handler failed', {
+          messageId: payload.messageId,
+          chatId: payload.chatId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
 
     const unsubTranscription = this.eventBus.subscribe(

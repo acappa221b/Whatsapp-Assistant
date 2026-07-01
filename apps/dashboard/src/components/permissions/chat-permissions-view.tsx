@@ -26,6 +26,7 @@ export type ChatPermissionRow = {
   audioProcessingEnabled: boolean
   reportGenerationEnabled: boolean
   agentPaused?: boolean
+  agentPausedReason?: string | null
   updatedAt: string
 }
 
@@ -463,6 +464,15 @@ export function ChatPermissionsView() {
                             void patchChat(chat.chatId, { agentChatEnabled: next })
                           }
                         />
+                        {chat.agentPaused ? (
+                          <span className="mt-1 block text-xs text-amber-600">
+                            IA pausada (
+                            {chat.agentPausedReason === 'human_takeover'
+                              ? 'você respondeu manualmente'
+                              : 'aguardando'}
+                            )
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <ToggleSwitch

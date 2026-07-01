@@ -102,6 +102,37 @@ describe('ProcessAgentAutoReplyUseCase', () => {
     })
   })
 
+  it('persists outbound after send when persistOutbound is configured', async () => {
+    const chatRepo = new InMemoryWhatsappChatConfigRepository()
+    const messageRepo = new InMemoryWhatsappMessageRepository()
+    const tracker = new AgentOutboundTracker()
+    await seedEnabledChat(chatRepo)
+
+    const sendMessage = vi.fn().mockResolvedValue(undefined)
+    const persistOutbound = vi.fn().mockResolvedValue(undefined)
+    const useCase = new ProcessAgentAutoReplyUseCase(
+      createDeps(chatRepo, messageRepo, tracker, {
+        agentChatProvider: {
+          generateReply: vi.fn().mockResolvedValue({
+            action: 'reply',
+            replyText: 'tudo certo',
+            shouldDefer: false,
+          }),
+        },
+        sendMessage,
+        persistOutbound,
+      }),
+    )
+
+    await useCase.execute(createIncomingMessage('msg-persist', 'e aí?'))
+    expect(sendMessage).toHaveBeenCalledOnce()
+    expect(persistOutbound).toHaveBeenCalledWith({
+      chatId: CHAT_ID,
+      content: 'tudo certo',
+      triggerMessageId: 'msg-persist',
+    })
+  })
+
   it('passes composed systemPrompt when training deps are configured', async () => {
     const chatRepo = new InMemoryWhatsappChatConfigRepository()
     const messageRepo = new InMemoryWhatsappMessageRepository()
@@ -362,12 +393,12 @@ describe('ProcessAgentAutoReplyUseCase', () => {
 })
 
 describe('HandleHumanTakeoverUseCase', () => {
-  it('disables agentChatEnabled on owner message', async () => {
+  it('pauses agent on owner message without disabling toggle', async () => {
     const chatRepo = new InMemoryWhatsappChatConfigRepository()
     await seedEnabledChat(chatRepo)
     await new HandleHumanTakeoverUseCase(chatRepo).execute(CHAT_ID)
     const config = await chatRepo.findByChatId(CHAT_ID)
-    expect(config?.agentChatEnabled).toBe(false)
+    expect(config?.agentChatEnabled).toBe(true)
     expect(config?.agentPausedReason).toBe('human_takeover')
   })
 })

@@ -39,4 +39,21 @@ export class AgentOutboundTracker {
     const order = this.recentOrder.get(chatId) ?? []
     return order.slice(-limit)
   }
+
+  unregister(chatId: string, content: string): void {
+    const trimmed = content.trim()
+    if (!trimmed) return
+    for (const store of [this.pending, this.known]) {
+      const set = store.get(chatId)
+      if (!set) continue
+      set.delete(trimmed)
+      if (set.size === 0) store.delete(chatId)
+    }
+    const order = this.recentOrder.get(chatId)
+    if (order) {
+      const index = order.lastIndexOf(trimmed)
+      if (index >= 0) order.splice(index, 1)
+      if (order.length === 0) this.recentOrder.delete(chatId)
+    }
+  }
 }

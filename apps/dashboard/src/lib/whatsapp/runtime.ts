@@ -1,4 +1,5 @@
 import { config } from '@finance-ai/shared/config'
+import { randomUUID } from 'node:crypto'
 import { ChatIdentityResolver, AUDIO_PENDING_CONTENT } from '@finance-ai/shared/utils'
 import { InMemoryEventBus } from '@finance-ai/core/events'
 import { DomainEvents } from '@finance-ai/core/events'
@@ -6,6 +7,7 @@ import {
   AgentAutoReplyPipeline,
   AgentOutboundTracker,
   AgentReplyDeduplicator,
+  getAgentReplyDiagnostics,
   HandleHumanTakeoverUseCase,
   PauseAgentAfterDeferralUseCase,
   ProcessAgentAutoReplyUseCase,
@@ -144,6 +146,8 @@ const globalForWhatsapp = globalThis as unknown as {
   whatsappRuntimeVersion?: number
   whatsappStatusListeners?: Set<StatusListener>
   whatsappPipelinesRegistered?: boolean
+  registeredPipelineEventBus?: InMemoryEventBus
+  pipelineCleanup?: () => void
   whatsappBootstrapPromise?: Promise<void>
   transcribeAudioUseCase?: TranscribeAudioUseCase
   retryPendingAudioTranscriptionsUseCase?: RetryPendingAudioTranscriptionsUseCase
@@ -440,6 +444,9 @@ function invalidateRuntimeCache(reason: string, health?: RuntimeHealth): void {
   globalForWhatsapp.whatsappRuntime = undefined
   globalForWhatsapp.whatsappRuntimeVersion = undefined
   globalForWhatsapp.whatsappPipelinesRegistered = false
+  globalForWhatsapp.registeredPipelineEventBus = undefined
+  globalForWhatsapp.pipelineCleanup?.()
+  globalForWhatsapp.pipelineCleanup = undefined
   globalForWhatsapp.whatsappBootstrapPromise = undefined
   globalForWhatsapp.transcribeAudioUseCase = undefined
   globalForWhatsapp.retryPendingAudioTranscriptionsUseCase = undefined
@@ -480,8 +487,17 @@ export function getWhatsappRuntime(): WhatsappRuntime {
 }
 
 function ensureWhatsappPipelinesRegistered(): void {
-  if (globalForWhatsapp.whatsappPipelinesRegistered) return
   const runtime = getWhatsappRuntime()
+  if (
+    globalForWhatsapp.whatsappPipelinesRegistered &&
+    globalForWhatsapp.registeredPipelineEventBus === runtime.eventBus
+  ) {
+    return
+  }
+
+  globalForWhatsapp.pipelineCleanup?.()
+  globalForWhatsapp.pipelineCleanup = undefined
+
   const messagePipeline = new WhatsappMessagePipeline(
     runtime.eventBus,
     runtime.ensureChatDiscoveredUseCase,
@@ -556,6 +572,22 @@ function ensureWhatsappPipelinesRegistered(): void {
       const settings = await settingsRepo.get()
       return settings.companyName?.trim() || undefined
     },
+    persistOutbound: async ({ chatId, content, triggerMessageId }) => {
+      const saved = await runtime.storeUseCase.execute({
+        externalMessageId: `agent-${randomUUID()}`,
+        chatId,
+        chatName: null,
+        sender: 'me',
+        senderId: chatId,
+        senderName: 'Você',
+        content,
+        messageType: 'TEXT',
+        rawPayload: { source: 'agent-auto-reply', triggerMessageId },
+        fromMe: true,
+        receivedAt: new Date(),
+      })
+      await runtime.messageRepository.markSourceAgent(saved.id)
+    },
   })
   const mediaDownloader = new MediaDownloader()
   const transcribeAudioUseCase = new TranscribeAudioUseCase(
@@ -619,10 +651,14 @@ function ensureWhatsappPipelinesRegistered(): void {
     (messageId) => transcribeAudioUseCase.execute(messageId),
   )
 
-  messagePipeline.register()
+  const pipelineCleanups: Array<() => void> = []
+  pipelineCleanups.push(messagePipeline.register())
   connectionPipeline.register(runtime.provider)
-  agentAutoReplyPipeline.register()
-  mediaProcessingPipeline.register()
+  pipelineCleanups.push(agentAutoReplyPipeline.register())
+  pipelineCleanups.push(mediaProcessingPipeline.register())
+  globalForWhatsapp.pipelineCleanup = () => {
+    for (const cleanup of pipelineCleanups) cleanup()
+  }
   registerDailyReportJob({
     chatConfigRepository: runtime.chatConfigRepository,
     messageRepository: runtime.messageRepository,
@@ -661,6 +697,7 @@ function ensureWhatsappPipelinesRegistered(): void {
     }
   })
 
+  globalForWhatsapp.registeredPipelineEventBus = runtime.eventBus
   globalForWhatsapp.whatsappPipelinesRegistered = true
 }
 
@@ -670,6 +707,11 @@ export async function bootstrapWhatsappRuntime(): Promise<void> {
       const operational = getOperationalState()
       operational.sessionLoaded = isValidAuthSession(config.whatsapp.sessionPath)
       ensureWhatsappPipelinesRegistered()
+      const { getAppLogger } = await import('@/lib/logging/app-log-sink')
+      getAppLogger().info('[whatsapp] Pipelines registered', {
+        pipelinesRegistered: areWhatsappPipelinesRegistered(),
+        runtimeVersion: WHATSAPP_RUNTIME_VERSION,
+      })
 
       if (!operational.sessionLoaded) {
         console.info('[whatsapp/bootstrap] no valid session on disk — waiting for manual connect')
@@ -763,7 +805,13 @@ export async function ensureWhatsappReady(): Promise<void> {
 }
 
 export function areWhatsappPipelinesRegistered(): boolean {
-  return Boolean(globalForWhatsapp.whatsappPipelinesRegistered)
+  if (!globalForWhatsapp.whatsappPipelinesRegistered) return false
+  if (!globalForWhatsapp.whatsappRuntime) return false
+  return globalForWhatsapp.registeredPipelineEventBus === globalForWhatsapp.whatsappRuntime.eventBus
+}
+
+export function isPipelineEventBusBound(): boolean {
+  return areWhatsappPipelinesRegistered()
 }
 
 export type WhatsappDiagnostics = {
@@ -777,6 +825,11 @@ export type WhatsappDiagnostics = {
   lastMessageAt: string | null
   syncFullHistory: boolean
   pipelinesRegistered: boolean
+  agentAutoReply: {
+    pipelinesRegistered: boolean
+    eventBusBound: boolean
+    lastDecision: ReturnType<typeof getAgentReplyDiagnostics>['lastDecision']
+  }
   runtimeHealth: RuntimeHealth
   hints: string[]
 }
@@ -817,6 +870,11 @@ export async function getWhatsappDiagnostics(): Promise<WhatsappDiagnostics> {
     lastMessageAt: operational.lastMessageAt,
     syncFullHistory: importHistoryEnabled,
     pipelinesRegistered: areWhatsappPipelinesRegistered(),
+    agentAutoReply: {
+      pipelinesRegistered: areWhatsappPipelinesRegistered(),
+      eventBusBound: isPipelineEventBusBound(),
+      lastDecision: getAgentReplyDiagnostics().lastDecision,
+    },
     runtimeHealth: getRuntimeHealth(),
     hints,
   }
