@@ -1,5 +1,5 @@
 {
-  "version": "1.7.3-rc29",
+  "version": "1.7.4-rc30",
   "appName": "WhatsApp Assistant",
   "github": {
     "owner": "acappa221b",
@@ -7,6 +7,6 @@
     "branch": "main"
   },
   "releasedAt": "2026-07-01",
-  "releaseNotes": "RC-29: fix agent auto-reply pipeline binding and outbound persistence",
+  "releaseNotes": "RC-30: WhatsApp data reset, manual contact sync, subtle sync chip in Permissions",
   "minLauncherVersion": 1
 }

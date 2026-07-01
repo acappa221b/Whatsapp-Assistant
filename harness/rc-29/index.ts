@@ -73,8 +73,8 @@ export const Rc29Harness: Harness = {
     }
 
     const version = readFileSync(join(ROOT, 'version.json'), 'utf-8')
-    if (!version.includes('1.7.3-rc29')) {
-      errors.push('version.json must be 1.7.3-rc29')
+    if (!version.includes('1.7.3-rc') && !version.includes('1.7.4-rc')) {
+      errors.push('version.json must be 1.7.3-rc or 1.7.4-rc (RC-29 or newer)')
     }
 
     return createResult(this.name, errors)

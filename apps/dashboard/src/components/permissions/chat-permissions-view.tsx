@@ -11,7 +11,10 @@ import {
   type SortState,
 } from '@finance-ai/shared/utils'
 import { ToggleSwitch } from '@/components/ui/toggle-switch'
-import { ContactSyncBanner } from '@/components/permissions/contact-sync-banner'
+import {
+  ContactSyncChip,
+  type SyncStatusResponse,
+} from '@/components/permissions/contact-sync-chip'
 
 export type ChatPermissionRow = {
   chatId: string
@@ -87,6 +90,8 @@ export function ChatPermissionsView() {
   const [search, setSearch] = useState('')
   const [chatTypeFilter, setChatTypeFilter] = useState<ChatTypeFilter>('all')
   const [messageFilter, setMessageFilter] = useState<MessageFilter>('with')
+  const [syncSnapshot, setSyncSnapshot] = useState<SyncStatusResponse | null>(null)
+  const [syncStarting, setSyncStarting] = useState(false)
   const limit = 50
   const refreshDebounceRef = useRef<number | null>(null)
 
@@ -312,18 +317,59 @@ export function ChatPermissionsView() {
     }
   }
 
+  async function startManualSync() {
+    if (!window.confirm('Iniciar sincronização de contatos do WhatsApp?')) return
+    setSyncStarting(true)
+    setFeedback(null)
+    setError(null)
+    try {
+      const response = await fetch('/api/whatsapp/sync-contacts', { method: 'POST' })
+      const data = (await response.json()) as { message?: string; error?: string }
+      if (!response.ok) {
+        setError(data.error ?? 'Falha ao iniciar sincronização')
+        return
+      }
+      setFeedback(data.message ?? 'Sincronização iniciada')
+      await loadChats()
+    } catch {
+      setError('Erro de rede ao sincronizar contatos')
+    } finally {
+      setSyncStarting(false)
+    }
+  }
+
+  const isSyncingEmpty =
+    total === 0 && syncSnapshot?.connected && syncSnapshot.status === 'syncing'
+
   return (
     <div className="space-y-6">
-      <ContactSyncBanner onProcessedIncrease={scheduleRefreshFromSync} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Permissões</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">Permissões</h1>
+            <ContactSyncChip
+              onProcessedIncrease={scheduleRefreshFromSync}
+              onSnapshotChange={setSyncSnapshot}
+            />
+          </div>
           <p className="text-sm text-muted-foreground">
             Controle quais conversas aparecem em Mensagens, resposta IA, processamento de mídia e
             relatórios diários. Chats aparecem aqui apos receber ou enviar mensagem.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {total === 0 &&
+          syncSnapshot?.connected &&
+          syncSnapshot.status !== 'syncing' ? (
+            <button
+              type="button"
+              disabled={syncStarting}
+              onClick={() => void startManualSync()}
+              className="inline-flex items-center gap-2 rounded-md border border-neon-green/40 bg-neon-green/10 px-3 py-2 text-sm hover:bg-neon-green/20 disabled:opacity-50"
+            >
+              {syncStarting ? 'Iniciando…' : 'Iniciar sincronização'}
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={pruning}
@@ -412,7 +458,16 @@ export function ChatPermissionsView() {
         </div>
       ) : null}
 
-      {loading && chats.length === 0 ? (
+      {loading && chats.length === 0 && isSyncingEmpty ? (
+        <div className="overflow-x-auto rounded-lg border">
+          <div className="space-y-2 p-6 text-sm text-muted-foreground">
+            <p>Sincronizando contatos…</p>
+            <div className="h-8 animate-pulse rounded bg-muted/60" />
+            <div className="h-8 animate-pulse rounded bg-muted/60" />
+            <div className="h-8 animate-pulse rounded bg-muted/60" />
+          </div>
+        </div>
+      ) : loading && chats.length === 0 ? (
         <p className="text-sm">Carregando e resolvendo nomes…</p>
       ) : (
         <>

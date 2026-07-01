@@ -46,6 +46,12 @@ export type {
   KnowledgeDocumentType,
   KnowledgeDocumentStatus,
 } from './repositories/ai-knowledge-document.prisma-repository'
+export {
+  clearWhatsappMediaStorage,
+  countMediaFilesRecursive,
+  deleteWhatsappDataInTransaction,
+  type WhatsappDataDeleteCounts,
+} from './whatsapp-data-reset'
 export { AppLogPrismaRepository } from './repositories/app-log.prisma-repository'
 export type {
   AppLogRecord,

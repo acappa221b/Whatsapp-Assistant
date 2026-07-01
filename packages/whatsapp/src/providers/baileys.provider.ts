@@ -291,6 +291,12 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     await this.connect()
   }
 
+  async reconnectForSync(): Promise<void> {
+    await this.teardownConnection()
+    this.allowReconnect = true
+    await this.connect()
+  }
+
   getStatus(): WhatsappStatus {
     return { ...this.status }
   }

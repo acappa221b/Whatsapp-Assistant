@@ -38,8 +38,8 @@ export const Rc28Harness: Harness = {
       join(ROOT, 'apps/dashboard/src/components/permissions/chat-permissions-view.tsx'),
       'utf-8',
     )
-    if (!permissions.includes('ContactSyncBanner')) {
-      errors.push('chat-permissions-view must render ContactSyncBanner')
+    if (!permissions.includes('ContactSyncChip')) {
+      errors.push('chat-permissions-view must render ContactSyncChip')
     }
 
     const runtime = readFileSync(join(ROOT, 'apps/dashboard/src/lib/whatsapp/runtime.ts'), 'utf-8')
@@ -59,8 +59,8 @@ export const Rc28Harness: Harness = {
     }
 
     const version = readFileSync(join(ROOT, 'version.json'), 'utf-8')
-    if (!version.includes('1.7.3-rc')) {
-      errors.push('version.json must be 1.7.3-rc (RC-28 or newer)')
+    if (!version.includes('1.7.3-rc') && !version.includes('1.7.4-rc')) {
+      errors.push('version.json must be 1.7.3-rc or 1.7.4-rc (RC-28 or newer)')
     }
 
     return createResult(this.name, errors)

@@ -9,6 +9,7 @@ import { AiTrainingTab } from '@/components/settings/ai-training/ai-training-tab
 import { SettingsAboutSection } from '@/components/settings/settings-about-section'
 import { ProviderSettingsPanel } from '@/components/settings/provider-settings-panel'
 import { SettingsLogsTab } from '@/components/settings/settings-logs-tab'
+import { WhatsappDataResetCard } from '@/components/settings/whatsapp-data-reset-card'
 
 const TABS = ['geral', 'provedores', 'ia', 'whatsapp', 'relatorios', 'logs'] as const
 type TabId = (typeof TABS)[number]
@@ -409,6 +410,9 @@ function SettingsPageContent() {
                   </label>
                 </CardContent>
               </Card>
+            ) : null}
+            {settings ? (
+              <WhatsappDataResetCard />
             ) : null}
           </>
         ) : null}

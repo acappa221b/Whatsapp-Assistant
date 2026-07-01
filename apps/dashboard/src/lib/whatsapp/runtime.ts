@@ -82,9 +82,12 @@ import { ChatMediaStorage } from '@finance-ai/shared/storage'
 import { registerDailyReportJob } from '@/lib/jobs/daily-report.job'
 import {
   completeSync,
+  failSync,
+  getContactSyncSnapshot,
   markWhatsappConnected,
   recordSyncedContact,
   resetSyncOnDisconnect,
+  resetSyncStateForManualRun,
   startSync,
   type SyncedContactEntry,
 } from './contact-sync-tracker'
@@ -119,6 +122,7 @@ type WhatsappRuntime = {
   resolveChatNamesUseCase: ResolveChatNamesUseCase
   fidelityUseCase: GetMessageFidelityMetricsUseCase
   contactNameResolver: ContactNameResolver
+  runContactBootstrap: () => Promise<void>
 }
 
 export type WhatsappOperationalStatus = {
@@ -157,6 +161,7 @@ const globalForWhatsapp = globalThis as unknown as {
     lastEventAt: Date | null
     lastEventName: string | null
   }
+  nameBootstrapDone?: boolean
 }
 
 function getOperationalState() {
@@ -314,7 +319,7 @@ function createRuntime(): WhatsappRuntime {
     })
   }
 
-  let nameBootstrapDone = false
+  let nameBootstrapDone = globalForWhatsapp.nameBootstrapDone ?? false
   let audioRetryDone = false
 
   const chatMediaStorage = new ChatMediaStorage()
@@ -323,9 +328,7 @@ function createRuntime(): WhatsappRuntime {
     createChatNameResolverPort(prisma, contactNameResolver),
   )
 
-  const handleConnectionOpen = async () => {
-    if (nameBootstrapDone) return
-    nameBootstrapDone = true
+  const runContactBootstrap = async () => {
     markWhatsappConnected()
     startSync('bootstrap', 'Sincronizando contatos…')
     contactNameResolver.setOwnJid(getOwnJidFromAuthSession(config.whatsapp.sessionPath))
@@ -341,6 +344,13 @@ function createRuntime(): WhatsappRuntime {
       chatMediaStorage,
       discoveryPolicy,
     })
+  }
+
+  const handleConnectionOpen = async () => {
+    if (nameBootstrapDone) return
+    nameBootstrapDone = true
+    globalForWhatsapp.nameBootstrapDone = true
+    await runContactBootstrap()
     completeSync('Sincronização de contatos concluída')
     const ownJid = getOwnJidFromAuthSession(config.whatsapp.sessionPath)
     const repair = await repairHistoricalMessages({
@@ -430,6 +440,7 @@ function createRuntime(): WhatsappRuntime {
     resolveChatNamesUseCase,
     fidelityUseCase,
     contactNameResolver,
+    runContactBootstrap,
   }
 }
 
@@ -912,5 +923,81 @@ export async function getWhatsappOperationalStatus(): Promise<WhatsappOperationa
     lastEventAt: operational.lastEventAt?.toISOString() ?? null,
     lastEventName: operational.lastEventName,
     operationalMessage: status.operationalMessage ?? null,
+  }
+}
+
+export function resetNameBootstrapFlag(): void {
+  globalForWhatsapp.nameBootstrapDone = false
+}
+
+export async function resetWhatsappRuntimeAfterDataWipe(): Promise<void> {
+  const wasConnected =
+    globalForWhatsapp.whatsappRuntime?.provider.getStatus().status === 'connected'
+  invalidateRuntimeCache('whatsapp-data-reset')
+  resetSyncOnDisconnect()
+  if (wasConnected) {
+    markWhatsappConnected()
+  }
+  globalForWhatsapp.nameBootstrapDone = false
+}
+
+export async function runManualContactSync(): Promise<{ processed: number; message: string }> {
+  await bootstrapWhatsappRuntime()
+  const runtime = getWhatsappRuntime()
+  const status = runtime.provider.getStatus()
+  if (status.status !== 'connected') {
+    const error = new Error('WhatsApp desconectado') as Error & { statusCode?: number }
+    error.statusCode = 503
+    throw error
+  }
+
+  resetSyncStateForManualRun()
+  resetNameBootstrapFlag()
+
+  try {
+    await runtime.runContactBootstrap()
+    const configs = await runtime.listChatConfigsUseCase.execute()
+    if (configs.length > 0) {
+      await runtime.resolveChatNamesUseCase.execute({
+        chatIds: configs.map((row) => row.chatId),
+      })
+    }
+
+    let chatCount = await prisma.whatsappChatConfig.count()
+    if (chatCount === 0) {
+      const policy = await loadWhatsappDiscoveryPolicy(prisma)
+      const anyEnabled =
+        policy.syncGroupsEnabled ||
+        policy.syncAddressBookEnabled ||
+        policy.syncChatsMetadataEnabled
+      if (!anyEnabled) {
+        const message =
+          'Nenhuma opção de sincronização ativa. Ative em Configurações → WhatsApp.'
+        completeSync(message)
+        return { processed: getContactSyncSnapshot().processed, message }
+      }
+
+      if (runtime.provider.reconnectForSync) {
+        await runtime.provider.reconnectForSync()
+        await waitForProviderStatus((s) => s.status === 'connected', 30_000)
+      }
+      chatCount = await prisma.whatsappChatConfig.count()
+    }
+
+    const message =
+      chatCount > 0
+        ? 'Sincronização concluída'
+        : 'Sincronização concluída — aguardando conversas'
+    completeSync(message)
+    const { getAppLogger } = await import('@/lib/logging/app-log-sink')
+    getAppLogger().info('[whatsapp] Sincronização manual de contatos', {
+      processed: getContactSyncSnapshot().processed,
+      chatCount,
+    })
+    return { processed: getContactSyncSnapshot().processed, message }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Falha na sincronização'
+    failSync(msg)
+    throw error
   }
 }

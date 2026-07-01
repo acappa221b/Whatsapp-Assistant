@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.3-rc29  
-**Fase:** RC-29 agent auto-reply pipeline fix  
+**Versão:** 1.7.4-rc30  
+**Fase:** RC-30 reset dados WhatsApp + sync manual + chip de status  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -289,9 +289,22 @@ A lista de chats segue a ordem da última mensagem (mais recente no topo), como 
 
 Após ENTER, a caixa libera na hora. Mensagens entram numa fila e são enviadas em ordem (bolhas otimistas enquanto envia).
 
-### Permissões — sync (RC-28)
+### Permissões — sync (RC-28 / RC-30)
 
-Ao conectar o WhatsApp, o banner mostra o progresso da sincronização. Chats novos surgem principalmente quando há mensagens (política message-driven, RC-22A).
+O status de sincronização aparece num **chip pequeno** ao lado do título em Permissões — não desloca a tabela.
+
+- **Iniciar sincronização:** use o botão na toolbar quando a lista estiver vazia e o WhatsApp estiver conectado
+- Chats novos surgem principalmente quando há mensagens (política message-driven, RC-22A), ou quando sync de grupos/agenda/lista está ativo em Configurações → WhatsApp
+
+### Reset de dados WhatsApp (RC-30)
+
+**Configurações → WhatsApp → Resetar dados.** Digite `RESETAR`. Mantém chaves IA e métricas do dashboard; apaga mensagens, chats, relatórios e mídia. A sessão Baileys permanece.
+
+**Após reset:**
+
+1. Reset em Configurações (opcional: ative sync de chats/grupos/agenda em Configurações → WhatsApp)
+2. **Permissões → Iniciar sincronização**
+3. Habilite os chats desejados
 
 ### Resposta IA — troubleshooting (RC-29)
 
@@ -309,7 +322,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 ## Próximo passo
 
-**RC-29** corrige o pipeline de Resposta IA (re-bind do EventBus), persistência da mensagem do agente e diagnóstico em `/api/whatsapp/diagnostics`.
+**RC-30** adiciona reset de dados WhatsApp (mantendo configurações), sincronização manual em Permissões e chip de status inline.
 
 ---
 
@@ -326,6 +339,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.4-rc30 | RC-30: reset dados WhatsApp, sync manual, chip de status em Permissões |
 | 1.7.3-rc29 | RC-29: fix auto-reply pipeline, persist outbound, agentPaused UI, diagnostics |
 | 1.7.3-rc28 | RC-28: fila de envio no composer, progresso de sync em Permissões, API sync-status |
 | 1.7.2-rc27 | RC-27: fix detecção Prisma client no layout pnpm (launcher não abortava após generate) |

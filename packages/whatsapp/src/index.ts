@@ -24,6 +24,8 @@ export interface WhatsappProvider {
   connect(): Promise<void>
   connectFresh(): Promise<void>
   disconnect(): Promise<void>
+  /** RC-30 — disconnect and reconnect without clearing session (triggers history/contacts sync) */
+  reconnectForSync?(): Promise<void>
   clearAuthState(): void
   getStatus(): WhatsappStatus
   onMessage(handler: (message: IncomingMessage) => Promise<void> | void): () => void

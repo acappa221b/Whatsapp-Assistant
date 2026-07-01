@@ -74,6 +74,10 @@ function toSnapshot(state: InternalSyncState): ContactSyncSnapshot {
 }
 
 function applyTimeoutRules(state: InternalSyncState): InternalSyncState {
+  if (state.status === 'completed' || state.status === 'error') {
+    return state
+  }
+
   const now = Date.now()
 
   if (state.status === 'syncing' && state.lastRecordAt) {
@@ -167,6 +171,20 @@ export function getContactSyncSnapshot(): ContactSyncSnapshot {
 export function resetSyncOnDisconnect(): void {
   const g = globalThis as unknown as Record<string, InternalSyncState | undefined>
   g[globalKey] = createInitialState()
+}
+
+export function resetSyncStateForManualRun(): void {
+  const state = getState()
+  state.processed = 0
+  state.recent = []
+  state.seenChatIds.clear()
+  state.status = 'syncing'
+  state.phase = 'bootstrap'
+  state.message = 'Sincronizando contatos…'
+  state.startedAt = new Date().toISOString()
+  state.completedAt = null
+  state.lastError = null
+  state.lastRecordAt = null
 }
 
 export function markWhatsappConnected(): void {
