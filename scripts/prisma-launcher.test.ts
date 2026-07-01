@@ -77,4 +77,25 @@ describe('prisma-launcher', () => {
 
     expect(launcher.needsPrismaGenerate()).toBe(true)
   })
+
+  it('detects generated client via pnpm virtual store layout', () => {
+    const enginePath =
+      'C:/fake-root/node_modules/.pnpm/pkg/node_modules/.prisma/client/index.js'
+    const clientEntry =
+      'C:/fake-root/node_modules/.pnpm/pkg/node_modules/@prisma/client/default.js'
+    mockResolve.mockImplementation((id: string) => {
+      if (id === '@prisma/client') return clientEntry
+      throw new Error(`Cannot find module '${id}'`)
+    })
+    mockExistsSync.mockImplementation((path: string) => {
+      const normalized = String(path).replace(/\\/g, '/')
+      return normalized === enginePath.replace(/\\/g, '/')
+    })
+    mockStatSync.mockImplementation((path: string) => ({
+      mtimeMs: String(path).includes('schema.prisma') ? 1000 : 2000,
+    }))
+
+    expect(launcher.isGeneratedPrismaClientReady()).toBe(true)
+    expect(launcher.needsPrismaGenerate()).toBe(false)
+  })
 })

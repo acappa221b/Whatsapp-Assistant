@@ -27,6 +27,7 @@
 - `postinstall` com try/catch
 - Implementar rotas de logs
 - Gate: `/api/health` **e** `/api/health/database` antes de abrir browser
+- **RC-26 follow-up:** com pnpm, o client gerado fica em `node_modules/.pnpm/.../node_modules/.prisma/client`, não em `node_modules/.prisma/client` na raiz — `getPrismaEnginePath()` resolve via `@prisma/client` + path relativo
 
 ## Reprodução (antes do fix)
 

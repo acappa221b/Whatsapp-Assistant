@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.1-rc26  
-**Fase:** RC-26 fresh clone Prisma bootstrap + logs API  
+**Versão:** 1.7.2-rc27  
+**Fase:** RC-26/27 fresh clone Prisma bootstrap (pnpm path fix)  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -312,6 +312,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.2-rc27 | RC-27: fix detecção Prisma client no layout pnpm (launcher não abortava após generate) |
 | 1.7.1-rc26 | RC-26: Prisma generate em clone novo, API logs RC-20, health gate database |
 | 1.7.0-rc25 | RC-25: sort chats por recência, tooltip custo tokens, custos Chat IA, gate áudio Whisper, Multi Mensagem |
 | 1.6.2-rc24 | RC-24: parse versao rc18b, fim banner falso de update, cache localVersion |

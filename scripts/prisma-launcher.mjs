@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
 import { resolveAppRoot } from './resolve-app-root.mjs'
 
@@ -14,6 +14,23 @@ export function getPrismaEnginePath() {
   try {
     return databaseRequire.resolve('.prisma/client/index')
   } catch {
+    // pnpm: generated client is a sibling of @prisma/client inside the virtual store
+    try {
+      const clientEntry = databaseRequire.resolve('@prisma/client')
+      const pnpmClientIndex = resolve(
+        dirname(clientEntry),
+        '..',
+        '..',
+        '.prisma',
+        'client',
+        'index.js',
+      )
+      if (existsSync(pnpmClientIndex)) {
+        return pnpmClientIndex
+      }
+    } catch {
+      // ignore
+    }
     if (existsSync(GENERATED_CLIENT_INDEX)) {
       return GENERATED_CLIENT_INDEX
     }

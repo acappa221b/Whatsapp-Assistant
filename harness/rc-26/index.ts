@@ -29,8 +29,8 @@ export const Rc26Harness: Harness = {
     if (launcher.includes('getPrismaClientEntry() || getPrismaEnginePath()')) {
       errors.push('prismaClientExists must not treat npm @prisma/client as generated client')
     }
-    if (launcher.includes('enginePath ?? clientPath')) {
-      errors.push('needsPrismaGenerate must not use npm package path as marker')
+    if (!launcher.includes('@prisma/client') || !launcher.includes('.prisma')) {
+      errors.push('prisma-launcher must resolve pnpm .prisma/client via @prisma/client')
     }
 
     const launch = readFileSync(join(ROOT, 'scripts/launch.mjs'), 'utf-8')
@@ -58,8 +58,8 @@ export const Rc26Harness: Harness = {
     }
 
     const version = readFileSync(join(ROOT, 'version.json'), 'utf-8')
-    if (!version.includes('1.7.1-rc26')) {
-      errors.push('version.json must be 1.7.1-rc26')
+    if (!version.includes('1.7.')) {
+      errors.push('version.json must be 1.7.x (RC-26 or newer)')
     }
 
     return createResult(this.name, errors)
