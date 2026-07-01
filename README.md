@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.5-rc31  
-**Fase:** RC-31 fix skips indevidos Resposta IA + logs com motivo  
+**Versão:** 1.7.6-rc32  
+**Fase:** RC-32 fix geração QR Baileys (stale socket + runtime teardown)  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -340,6 +340,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.6-rc32 | RC-32: fix QR Baileys — socketInstanceId antes do factory, guards stale, teardown runtime |
 | 1.7.5-rc31 | RC-31: fix skips indevidos Resposta IA, logs com motivo, recentContext sourceAgent |
 | 1.7.4-rc30 | RC-30: reset dados WhatsApp, sync manual, chip de status em Permissões |
 | 1.7.3-rc29 | RC-29: fix auto-reply pipeline, persist outbound, agentPaused UI, diagnostics |

@@ -1,5 +1,5 @@
 {
-  "version": "1.7.5-rc31",
+  "version": "1.7.6-rc32",
   "appName": "WhatsApp Assistant",
   "github": {
     "owner": "acappa221b",
@@ -7,6 +7,6 @@
     "branch": "main"
   },
   "releasedAt": "2026-07-01",
-  "releaseNotes": "RC-31: fix false agent skips, surface skip reasons in logs and UI",
+  "releaseNotes": "RC-32: fix Baileys QR generation (stale socket race, runtime teardown)",
   "minLauncherVersion": 1
 }

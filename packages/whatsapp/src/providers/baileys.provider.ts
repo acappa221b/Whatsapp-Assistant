@@ -145,6 +145,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     if (this.connectingInFlight) {
       return this.connectingInFlight
     }
+    this.allowReconnect = true
     this.connectingInFlight = this.doConnect().finally(() => {
       this.connectingInFlight = null
     })
@@ -211,6 +212,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     const session = inspectAuthSession(this.authDir)
     this.socketInstanceCounter += 1
     const socketInstanceId = this.socketInstanceCounter
+    this.currentSocketInstanceId = socketInstanceId
     console.info('[baileys/diagnostic] connect start', {
       authDir: session.absolutePath,
       sessionExists: session.exists,
@@ -230,7 +232,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     this.socket = await this.socketFactory({
       authDir: this.authDir,
       onQr: (qr) => {
-        void this.handleQr(qr)
+        void this.handleQr(qr, socketInstanceId)
       },
       onConnectionUpdate: (update) => {
         void this.handleConnectionUpdate(update, socketInstanceId)
@@ -249,6 +251,10 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
       onHistorySyncProgress: this.onHistorySyncProgress,
     })
     this.currentSocketInstanceId = socketInstanceId
+  }
+
+  private isActiveSocket(socketInstanceId: number): boolean {
+    return socketInstanceId === this.currentSocketInstanceId
   }
 
   private isRecoverableSessionError(error: unknown): boolean {
@@ -292,9 +298,13 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
   }
 
   async reconnectForSync(): Promise<void> {
-    await this.teardownConnection()
-    this.allowReconnect = true
-    await this.connect()
+    if (this.connectingInFlight) {
+      return this.connectingInFlight
+    }
+    this.connectingInFlight = this.doConnect().finally(() => {
+      this.connectingInFlight = null
+    })
+    return this.connectingInFlight
   }
 
   getStatus(): WhatsappStatus {
@@ -322,7 +332,11 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     await this.socket.sendMessage(message.to, { text: message.content })
   }
 
-  private async handleQr(qr: string): Promise<void> {
+  private async handleQr(qr: string, socketInstanceId: number): Promise<void> {
+    if (!this.isActiveSocket(socketInstanceId)) {
+      traceQrFlow('provider', 'handleQr:ignored-stale', { socketInstanceId })
+      return
+    }
     traceQrFlow('provider', 'handleQr:entry', {
       qrLength: qr.length,
       qrPrefix: qr.slice(0, 12),
@@ -334,7 +348,19 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
       traceQrFlow('provider', 'handleQr:skipped-connected', {})
       return
     }
-    const qrCodeDataUrl = await this.qrDataUrlGenerator(qr)
+    let qrCodeDataUrl: string
+    try {
+      qrCodeDataUrl = await this.qrDataUrlGenerator(qr)
+    } catch (error) {
+      getSharedAppLogger().error('[baileys] QR data URL generation failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+    if (!this.isActiveSocket(socketInstanceId)) {
+      traceQrFlow('provider', 'handleQr:ignored-stale-after-generate', { socketInstanceId })
+      return
+    }
     logProviderQrReceived({
       qrLength: qr.length,
       providerStatus: this.status.status,
@@ -349,6 +375,15 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     update: ConnectionUpdate,
     socketInstanceId: number,
   ): Promise<void> {
+    if (!this.isActiveSocket(socketInstanceId)) {
+      traceQrFlow('provider', 'connection.update:ignored-stale', {
+        socketInstanceId,
+        activeSocketInstanceId: this.currentSocketInstanceId,
+        connection: update.connection ?? null,
+      })
+      return
+    }
+
     const statusCode = update.lastDisconnect?.error?.output?.statusCode
     const disconnectMessage =
       update.lastDisconnect?.error?.message != null

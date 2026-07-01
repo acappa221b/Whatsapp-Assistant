@@ -156,6 +156,7 @@ const globalForWhatsapp = globalThis as unknown as {
   transcribeAudioUseCase?: TranscribeAudioUseCase
   retryPendingAudioTranscriptionsUseCase?: RetryPendingAudioTranscriptionsUseCase
   processAgentAutoReplyUseCase?: ProcessAgentAutoReplyUseCase
+  providerStatusUnsubscribe?: () => void
   whatsappOperational?: {
     sessionLoaded: boolean
     lastMessageAt: Date | null
@@ -453,6 +454,12 @@ function invalidateRuntimeCache(reason: string, health?: RuntimeHealth): void {
     expectedVersion: WHATSAPP_RUNTIME_VERSION,
     missing: health?.missing ?? [],
   })
+  globalForWhatsapp.providerStatusUnsubscribe?.()
+  globalForWhatsapp.providerStatusUnsubscribe = undefined
+  const priorProvider = globalForWhatsapp.whatsappRuntime?.provider
+  if (priorProvider) {
+    void priorProvider.disconnect().catch(() => undefined)
+  }
   globalForWhatsapp.whatsappRuntime = undefined
   globalForWhatsapp.whatsappRuntimeVersion = undefined
   globalForWhatsapp.whatsappPipelinesRegistered = false
@@ -697,7 +704,8 @@ function ensureWhatsappPipelinesRegistered(): void {
     globalForWhatsapp.whatsappStatusListeners = new Set()
   }
 
-  runtime.provider.onStatusChange((status) => {
+  globalForWhatsapp.providerStatusUnsubscribe?.()
+  globalForWhatsapp.providerStatusUnsubscribe = runtime.provider.onStatusChange((status) => {
     recordOperationalEvent(`connection.${status.status}`)
     if (status.status === 'connected') {
       markWhatsappConnected()

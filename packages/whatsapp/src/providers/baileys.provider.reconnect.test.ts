@@ -61,6 +61,33 @@ describe('BaileysWhatsappProvider reconnect (RC-07)', () => {
     await Promise.all([provider.connect(), provider.connect(), provider.connect()])
     expect(factoryCalls).toBe(1)
   })
+
+  it('ignores connection updates from a stale socket instance', async () => {
+    let staleHandler: ((update: { connection?: string }) => void) | undefined
+    let activeHandler: ((update: { connection?: string }) => void) | undefined
+    let factoryCalls = 0
+
+    const provider = new BaileysWhatsappProvider({
+      socketFactory: async ({ onConnectionUpdate }) => {
+        factoryCalls += 1
+        if (factoryCalls === 1) {
+          staleHandler = onConnectionUpdate
+        } else {
+          activeHandler = onConnectionUpdate
+        }
+        return createMockSocket([])
+      },
+      qrDataUrlGenerator: async () => 'data:image/png;base64,test',
+    })
+
+    await provider.connect()
+    staleHandler?.({ connection: 'close' })
+
+    await provider.connect()
+    activeHandler?.({ connection: 'open' })
+
+    expect(provider.getStatus().status).toBe('connected')
+  })
 })
 
 function createMockSocket(endCalls: number[]): BaileysSocketEvents {
