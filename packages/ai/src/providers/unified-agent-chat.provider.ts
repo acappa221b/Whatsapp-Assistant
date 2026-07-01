@@ -29,10 +29,15 @@ function buildUserPrompt(input: AgentReplyInput): string {
     styleBlock,
     contextBlock,
     `Mensagem recebida: ${input.incomingMessage}`,
+    input.gatesPassed
+      ? 'Gates pre-LLM passaram. OBRIGATORIO action=reply salvo impossibilidade real de responder.'
+      : null,
     '',
     'Responda APENAS com JSON válido no formato:',
     '{"action":"reply|skip|defer","reply":"texto","deferralPhrase":"opcional","skipReason":"opcional"}',
-  ].join('\n')
+  ]
+    .filter((line) => line !== null)
+    .join('\n')
 }
 
 function parseAgentReplyJson(text: string): z.infer<typeof AgentReplySchema> {

@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.4-rc30  
-**Fase:** RC-30 reset dados WhatsApp + sync manual + chip de status  
+**Versão:** 1.7.5-rc31  
+**Fase:** RC-31 fix skips indevidos Resposta IA + logs com motivo  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -306,13 +306,14 @@ O status de sincronização aparece num **chip pequeno** ao lado do título em P
 2. **Permissões → Iniciar sincronização**
 3. Habilite os chats desejados
 
-### Resposta IA — troubleshooting (RC-29)
+### Resposta IA — troubleshooting (RC-29 / RC-31)
 
-- **Testar resposta** em Configurações → IA valida só o modelo — não envia WhatsApp.
-- Envio real: mensagem inbound → pipeline → Baileys `sendMessage` + persistência local.
-- Se não responder após HMR/restart: verifique `/api/whatsapp/diagnostics` → `agentAutoReply.eventBusBound`.
+- **Testar resposta** em Configurações → IA valida só o modelo — marque **Simular regras do WhatsApp** para reproduzir skips do live (ack-only, defer).
+- Envio real: mensagem inbound → pipeline → Baileys `sendMessage` + persistência local (`sourceAgent: true`).
+- Logs em Configurações → Logs (domínio **IA**): `[AgentChat] skip: ack-only (#3)` ou `[AgentChat] reply sent (#3)` — metadata JSON abaixo da linha.
+- Se não responder: verifique `/api/whatsapp/diagnostics` → `agentAutoReply.lastDecision.reason` e badge **IA pausada** em Permissões.
 - Responder manualmente (composer em Mensagens) **pausa** a IA no chat; religue **Resposta IA** em Permissões para retomar.
-- Logs estruturados: Configurações → Logs, filtre `[AgentChat]`.
+- `llm-skip` **não** pausa o agente — apenas silencia aquela mensagem.
 
 ### Multi Mensagem (RC-25)
 
@@ -322,7 +323,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 ## Próximo passo
 
-**RC-30** adiciona reset de dados WhatsApp (mantendo configurações), sincronização manual em Permissões e chip de status inline.
+**RC-31** corrige skips indevidos (ack-only, contexto recente) e exibe motivos de skip nos logs.
 
 ---
 
@@ -339,6 +340,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.5-rc31 | RC-31: fix skips indevidos Resposta IA, logs com motivo, recentContext sourceAgent |
 | 1.7.4-rc30 | RC-30: reset dados WhatsApp, sync manual, chip de status em Permissões |
 | 1.7.3-rc29 | RC-29: fix auto-reply pipeline, persist outbound, agentPaused UI, diagnostics |
 | 1.7.3-rc28 | RC-28: fila de envio no composer, progresso de sync em Permissões, API sync-status |

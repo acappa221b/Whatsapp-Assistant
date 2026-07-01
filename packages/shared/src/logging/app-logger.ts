@@ -50,7 +50,7 @@ export function inferDomainFromMessage(message: string): AppLogDomain {
   if (lower.includes('[settings/') || lower.includes('/api/') || lower.includes('[api]')) {
     return 'api'
   }
-  if (lower.includes('openai') || lower.includes('gemini') || lower.includes('whisper') || lower.includes('[ai]')) {
+  if (lower.includes('openai') || lower.includes('gemini') || lower.includes('whisper') || lower.includes('[ai]') || lower.includes('[agentchat]')) {
     return 'ai'
   }
   if (lower.includes('prisma') || lower.includes('[database]') || lower.includes('sqlite')) {

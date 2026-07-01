@@ -11,6 +11,7 @@ import { isLegacyAgentOutboundMessage } from '@finance-ai/shared/utils'
 type Body = {
   message: string
   chatId?: string
+  simulateLiveGates?: boolean
 }
 
 export async function POST(request: Request) {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
       persona,
       ownerStyleSamples,
       companyName: await getCompanyName(),
+      simulateLiveGates: body.simulateLiveGates ?? false,
     })
 
     return NextResponse.json({

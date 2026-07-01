@@ -104,6 +104,7 @@ import { Rc26Harnesses } from './rc-26'
 import { Rc28Harnesses } from './rc-28'
 import { Rc29Harnesses } from './rc-29'
 import { Rc30Harnesses } from './rc-30'
+import { Rc31Harnesses } from './rc-31'
 import { RepoHygieneHarnesses } from './repo-hygiene'
 import {
   Assistant01PlanningHarness,
@@ -205,6 +206,7 @@ const harnesses = [
   ...Rc28Harnesses,
   ...Rc29Harnesses,
   ...Rc30Harnesses,
+  ...Rc31Harnesses,
   ...RepoHygieneHarnesses,
 ]
 

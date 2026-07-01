@@ -31,6 +31,7 @@ type KnowledgeRow = {
 type PreviewResult = {
   action: string
   replyText: string
+  skipReason?: string
   matchedDocuments: Array<{ id: string; title: string; score: number }>
 }
 
@@ -52,6 +53,7 @@ export function AiTrainingTab() {
   const [newExample, setNewExample] = useState('')
   const [uploadTitle, setUploadTitle] = useState('')
   const [previewMessage, setPreviewMessage] = useState('Quanto custa o plano básico?')
+  const [simulateLiveGates, setSimulateLiveGates] = useState(true)
   const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
@@ -133,7 +135,7 @@ export function AiTrainingTab() {
       const res = await fetch('/api/settings/ai/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: previewMessage }),
+        body: JSON.stringify({ message: previewMessage, simulateLiveGates }),
       })
       if (res.ok) {
         setPreviewResult((await res.json()) as PreviewResult)
@@ -468,6 +470,14 @@ export function AiTrainingTab() {
           <p className="text-xs text-muted-foreground">
             Este teste não envia WhatsApp. Valida apenas o modelo e as regras de resposta.
           </p>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={simulateLiveGates}
+              onChange={(e) => setSimulateLiveGates(e.target.checked)}
+            />
+            Simular regras do WhatsApp (recomendado)
+          </label>
           <div className="flex flex-wrap gap-2">
             <input
               className="min-w-[240px] flex-1 rounded-md border bg-background px-3 py-2 text-sm"
@@ -483,6 +493,11 @@ export function AiTrainingTab() {
               <p>
                 <strong>Ação:</strong> {previewResult.action}
               </p>
+              {previewResult.skipReason ? (
+                <p>
+                  <strong>Motivo skip:</strong> {previewResult.skipReason}
+                </p>
+              ) : null}
               {previewResult.replyText ? (
                 <p>
                   <strong>Resposta:</strong> {previewResult.replyText}

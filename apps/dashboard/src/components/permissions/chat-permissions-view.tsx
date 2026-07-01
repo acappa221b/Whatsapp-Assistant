@@ -520,12 +520,13 @@ export function ChatPermissionsView() {
                           }
                         />
                         {chat.agentPaused ? (
-                          <span className="mt-1 block text-xs text-amber-600">
-                            IA pausada (
+                          <span className="mt-1 inline-flex rounded-full border border-amber-400/60 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+                            IA pausada — religue Resposta IA
                             {chat.agentPausedReason === 'human_takeover'
-                              ? 'você respondeu manualmente'
-                              : 'aguardando'}
-                            )
+                              ? ' (você respondeu manualmente)'
+                              : chat.agentPausedReason === 'deferral'
+                                ? ' (aguardando)'
+                                : ''}
                           </span>
                         ) : null}
                       </td>

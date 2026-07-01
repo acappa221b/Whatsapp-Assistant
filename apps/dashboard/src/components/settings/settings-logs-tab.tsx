@@ -258,6 +258,11 @@ export function SettingsLogsTab() {
                   <span className="uppercase">{item.level}</span>
                 </div>
                 <pre className="whitespace-pre-wrap break-words font-mono text-sm">{item.message}</pre>
+                {item.metadata && Object.keys(item.metadata).length > 0 ? (
+                  <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                    {JSON.stringify(item.metadata, null, 2)}
+                  </pre>
+                ) : null}
               </div>
             ))}
           </div>

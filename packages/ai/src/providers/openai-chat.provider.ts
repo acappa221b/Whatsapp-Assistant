@@ -13,6 +13,7 @@ export type AgentReplyInput = {
   recentContext: Array<{ role: 'user' | 'assistant'; content: string }>
   hasOwnerHistory: boolean
   systemPrompt?: string
+  gatesPassed?: boolean
 }
 
 export type AgentReplyOutput = {
@@ -43,11 +44,11 @@ export const LEGACY_SYSTEM_PROMPT = [
   '4. Nunca mencione que é IA na resposta gerada.',
   '5. Respostas curtas, estilo WhatsApp.',
   '6. NUNCA faça convites (marcar horário, "vamos nos encontrar", "pode ser às X", "te chamo depois") nem aceite convites ("combinado", "fechado", "pode ser", "tô dentro"). Se pedirem compromisso → action=defer com frase pedindo tempo.',
-  '7. NÃO responda a tudo. Use action=skip quando a mensagem for só reconhecimento/encerramento: "boa", "boaaa", "kkk", "kkkk", "show", "legal", "blz", "beleza", "tmj", "valeu", emoji só, etc.',
-  '8. Se você JÁ respondeu no contexto recente com a mesma ideia (ex.: "avisa quando finalizar"), NÃO repita. Use action=skip se a nova mensagem só atualiza status sem pergunta nova.',
-  '9. Se a pessoa só informa andamento ("só um ajuste fino", "quase lá", "finalizando") após você já ter reconhecido, use action=skip.',
-  '10. Prefira silêncio a resposta redundante. Na dúvida entre responder pouco e repetir → skip.',
-  '11. Saudações (oi, olá, bom dia, etc.) → SEMPRE action=reply com resposta educada e breve em português brasileiro. Ex.: "Oi! Tudo bem?" / "Olá! Como posso ajudar?"',
+  '7. Use action=skip SOMENTE para reconhecimento puro sem conteudo: "boa", "kkk", "show", "legal", "blz", emoji so — mensagens curtas ja filtradas antes do LLM.',
+  '8. Se voce JA respondeu no contexto recente com a mesma ideia, NAO repita. Use action=skip se a nova mensagem so atualiza status sem pergunta nova.',
+  '9. Se a pessoa so informa andamento ("so um ajuste fino", "quase la") apos voce ja ter reconhecido, use action=skip.',
+  '10. Saudacoes (oi, ola, tudo bem, bom dia), perguntas com ? e mensagens com varias palavras → action=reply salvo impossibilidade real.',
+  '11. Quando gatesPassed=true no prompt, priorize action=reply — o sistema ja descartou ack-only e mensagens triviais.',
 ].join('\n')
 
 export type TokenUsageCallback = (usage: {
@@ -69,7 +70,16 @@ function buildUserPrompt(input: AgentReplyInput): string {
       ? `Contexto recente:\n${input.recentContext.map((m) => `${m.role}: ${m.content}`).join('\n')}`
       : 'Sem contexto recente.'
 
-  return [styleBlock, contextBlock, `Mensagem recebida: ${input.incomingMessage}`].join('\n\n')
+  return [
+    styleBlock,
+    contextBlock,
+    `Mensagem recebida: ${input.incomingMessage}`,
+    input.gatesPassed
+      ? 'Gates pre-LLM passaram. OBRIGATORIO action=reply salvo impossibilidade real de responder (sem inventar fatos).'
+      : null,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export class OpenAIChatProvider implements AgentChatProvider {

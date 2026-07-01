@@ -20,6 +20,7 @@ describe('app-logger (RC-20)', () => {
     expect(inferDomainFromMessage('[assistant/chat] reply')).toBe('assistant')
     expect(inferDomainFromMessage('[DailyReport] generated')).toBe('jobs')
     expect(inferDomainFromMessage('[settings/providers POST] error')).toBe('api')
+    expect(inferDomainFromMessage('[AgentChat] skip: ack-only (#3)')).toBe('ai')
     expect(inferDomainFromMessage('random message')).toBe('system')
   })
 

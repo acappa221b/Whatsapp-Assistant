@@ -23,6 +23,29 @@ import {
   shouldSkipBeforeLLM,
 } from './should-auto-reply-to-message'
 
+export function mapRecentRole(entry: WhatsappMessage): 'user' | 'assistant' | null {
+  if (!entry.fromMe) return 'user'
+  if (entry.sourceAgent) return 'assistant'
+  return null
+}
+
+export function buildRecentContext(
+  recentMessages: WhatsappMessage[],
+  excludeMessageId?: string,
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  return [...recentMessages]
+    .reverse()
+    .filter((entry) => entry.id !== excludeMessageId)
+    .map((entry) => {
+      const role = mapRecentRole(entry)
+      if (!role) return null
+      const content = entry.content.trim()
+      if (!content) return null
+      return { role, content }
+    })
+    .filter((entry): entry is { role: 'user' | 'assistant'; content: string } => entry !== null)
+}
+
 export type AgentReplyAction = 'reply' | 'skip' | 'defer'
 
 export type AgentReplyInput = {
@@ -33,6 +56,8 @@ export type AgentReplyInput = {
   recentContext: Array<{ role: 'user' | 'assistant'; content: string }>
   hasOwnerHistory: boolean
   systemPrompt?: string
+  /** Pre-LLM gates passed — prefer reply unless truly impossible */
+  gatesPassed?: boolean
 }
 
 export type AgentReplyOutput = {
@@ -109,7 +134,9 @@ export class ProcessAgentAutoReplyUseCase {
       return
     }
     if (config.agentPaused) {
-      this.logSkip(message.chatId, config.displayNumber, 'agent-paused')
+      this.logSkip(message.chatId, config.displayNumber, 'agent-paused', {
+        agentPausedReason: config.agentPausedReason ?? null,
+      })
       return
     }
 
@@ -168,14 +195,7 @@ export class ProcessAgentAutoReplyUseCase {
     const recentMessages = await this.deps.messageRepository.findRecentByChatId(message.chatId, {
       limit: 10,
     })
-    const recentContext = [...recentMessages]
-      .reverse()
-      .filter((entry) => entry.id !== message.id)
-      .map((entry) => ({
-        role: entry.fromMe ? ('assistant' as const) : ('user' as const),
-        content: entry.content.trim(),
-      }))
-      .filter((entry) => entry.content)
+    const recentContext = buildRecentContext(recentMessages, message.id)
 
     const incomingForSkip = stripMediaPrefix(incomingText)
     const skipDecision = shouldSkipBeforeLLM(incomingForSkip, recentContext)
@@ -232,6 +252,7 @@ export class ProcessAgentAutoReplyUseCase {
       recentContext,
       hasOwnerHistory: ownerStyleSamples.length > 0,
       systemPrompt,
+      gatesPassed: true,
     })
 
     if (result.action === 'skip' || result.skipReason) {
@@ -285,7 +306,7 @@ export class ProcessAgentAutoReplyUseCase {
         action: decisionAction,
         reason: action,
       })
-      getSharedAppLogger().info('[AgentChat] reply sent', {
+      getSharedAppLogger().info(`[AgentChat] reply sent${displayNumber ? ` (#${displayNumber})` : ''}`, {
         chatId: message.chatId,
         displayNumber,
         action,
@@ -325,19 +346,28 @@ export class ProcessAgentAutoReplyUseCase {
     const outbound = formatAgentOutbound(phrase)
     await this.deliverOutbound(message, displayNumber, outbound, 'defer')
     await this.deps.pauseAfterDeferral.execute(message.chatId)
-    getSharedAppLogger().info('[AgentChat] defer', {
+    getSharedAppLogger().info(`[AgentChat] defer${displayNumber ? ` (#${displayNumber})` : ''}`, {
       chatId: message.chatId,
       displayNumber,
       action: 'paused',
     })
   }
 
-  private logSkip(chatId: string, displayNumber: number | undefined, reason: string): void {
+  private logSkip(
+    chatId: string,
+    displayNumber: number | undefined,
+    reason: string,
+    extra?: Record<string, unknown>,
+  ): void {
     recordAgentReplyDecision({ chatId, action: 'skip', reason })
-    getSharedAppLogger().info('[AgentChat] skip', {
-      chatId,
-      displayNumber,
-      reason,
-    })
+    getSharedAppLogger().info(
+      `[AgentChat] skip: ${reason}${displayNumber ? ` (#${displayNumber})` : ''}`,
+      {
+        chatId,
+        displayNumber,
+        reason,
+        ...extra,
+      },
+    )
   }
 }

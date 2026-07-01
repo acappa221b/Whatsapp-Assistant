@@ -1,7 +1,7 @@
 export type SkipDecision = { skip: true; reason: string } | { skip: false }
 
 const GREETING_PATTERN =
-  /^(oi|olá|ola|oie|e aí|e ai|eae|fala|bom dia|boa tarde|boa noite|hey|hello|hi)(?:[!?.…,\s]|$)/i
+  /^(oi|olá|ola|oie|e aí|e ai|eae|fala|bom dia|boa tarde|boa noite|hey|hello|hi|tudo bem|td bem|tudo bom|como vai|beleza\?)(?:[!?.…,\s]|$)/i
 
 const ACK_ONLY_PATTERN =
   /^(boa+|blz|beleza|show|legal|massa|top|tmj|valeu|ok+|kk+|haha+|rs+|👍|🙏|✅)+[!.?\s]*$/iu
@@ -45,12 +45,9 @@ export function shouldSkipBeforeLLM(
   }
 
   const normalized = trimmed.toLowerCase()
+  const isMultiWordConversation = trimmed.includes(' ') && trimmed.length > 6
 
-  if (ACK_ONLY_PATTERN.test(normalized)) {
-    return { skip: true, reason: 'ack-only' }
-  }
-
-  if (trimmed.length <= 12 && !trimmed.includes('?')) {
+  if (ACK_ONLY_PATTERN.test(normalized) && !isMultiWordConversation) {
     return { skip: true, reason: 'ack-only' }
   }
 
@@ -61,7 +58,7 @@ export function shouldSkipBeforeLLM(
     }
   }
 
-  if (lastAssistant && ACK_ONLY_PATTERN.test(normalized)) {
+  if (lastAssistant && ACK_ONLY_PATTERN.test(normalized) && !isMultiWordConversation) {
     return { skip: true, reason: 'ack-after-assistant' }
   }
 

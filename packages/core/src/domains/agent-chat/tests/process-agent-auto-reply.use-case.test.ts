@@ -38,7 +38,7 @@ function createIncomingMessage(id: string, content: string, receivedAt = new Dat
   })
 }
 
-function createAgentEcho(id: string, content: string, receivedAt = new Date()) {
+function createAgentEcho(id: string, content: string, receivedAt = new Date(), sourceAgent = true) {
   return WhatsappMessage.create({
     id,
     externalMessageId: `ext-${id}`,
@@ -49,6 +49,7 @@ function createAgentEcho(id: string, content: string, receivedAt = new Date()) {
     messageType: 'TEXT',
     rawPayload: {},
     fromMe: true,
+    sourceAgent,
     receivedAt,
   })
 }
@@ -297,6 +298,38 @@ describe('ProcessAgentAutoReplyUseCase', () => {
     expect(sendMessage).not.toHaveBeenCalled()
     const config = await chatRepo.findByChatId(CHAT_ID)
     expect(config?.agentPaused).toBe(false)
+  })
+
+  it('does not skip contact reply when owner manual message is not sourceAgent', async () => {
+    const chatRepo = new InMemoryWhatsappChatConfigRepository()
+    const messageRepo = new InMemoryWhatsappMessageRepository()
+    const tracker = new AgentOutboundTracker()
+    await seedEnabledChat(chatRepo)
+
+    const t0 = new Date('2025-06-25T10:00:00Z')
+    const t1 = new Date('2025-06-25T10:01:00Z')
+    const t2 = new Date('2025-06-25T10:02:00Z')
+
+    await messageRepo.save(
+      createAgentEcho('owner-manual', 'beleza, avisa quando finalizar', t0, false),
+    )
+
+    const sendMessage = vi.fn().mockResolvedValue(undefined)
+    const generateReply = vi.fn().mockResolvedValue({
+      action: 'reply',
+      replyText: 'Perfeito!',
+      shouldDefer: false,
+    })
+    const useCase = new ProcessAgentAutoReplyUseCase(
+      createDeps(chatRepo, messageRepo, tracker, {
+        agentChatProvider: { generateReply },
+        sendMessage,
+      }),
+    )
+
+    await useCase.execute(createIncomingMessage('contact-status', 'só um ajuste fino', t2))
+    expect(generateReply).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledOnce()
   })
 
   it('reproduces Thiago thread: one ack then silence on status and boa', async () => {

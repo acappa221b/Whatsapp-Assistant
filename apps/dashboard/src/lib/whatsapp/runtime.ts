@@ -155,6 +155,7 @@ const globalForWhatsapp = globalThis as unknown as {
   whatsappBootstrapPromise?: Promise<void>
   transcribeAudioUseCase?: TranscribeAudioUseCase
   retryPendingAudioTranscriptionsUseCase?: RetryPendingAudioTranscriptionsUseCase
+  processAgentAutoReplyUseCase?: ProcessAgentAutoReplyUseCase
   whatsappOperational?: {
     sessionLoaded: boolean
     lastMessageAt: Date | null
@@ -461,6 +462,7 @@ function invalidateRuntimeCache(reason: string, health?: RuntimeHealth): void {
   globalForWhatsapp.whatsappBootstrapPromise = undefined
   globalForWhatsapp.transcribeAudioUseCase = undefined
   globalForWhatsapp.retryPendingAudioTranscriptionsUseCase = undefined
+  globalForWhatsapp.processAgentAutoReplyUseCase = undefined
 }
 
 function needsRuntimeRebuild(): boolean {
@@ -709,6 +711,7 @@ function ensureWhatsappPipelinesRegistered(): void {
   })
 
   globalForWhatsapp.registeredPipelineEventBus = runtime.eventBus
+  globalForWhatsapp.processAgentAutoReplyUseCase = processAgentAutoReplyUseCase
   globalForWhatsapp.whatsappPipelinesRegistered = true
 }
 
@@ -821,6 +824,14 @@ export function areWhatsappPipelinesRegistered(): boolean {
   return globalForWhatsapp.registeredPipelineEventBus === globalForWhatsapp.whatsappRuntime.eventBus
 }
 
+export function getProcessAgentAutoReplyUseCase(): ProcessAgentAutoReplyUseCase {
+  ensureWhatsappPipelinesRegistered()
+  if (!globalForWhatsapp.processAgentAutoReplyUseCase) {
+    throw new Error('Agent auto-reply use case not initialized')
+  }
+  return globalForWhatsapp.processAgentAutoReplyUseCase
+}
+
 export function isPipelineEventBusBound(): boolean {
   return areWhatsappPipelinesRegistered()
 }
@@ -868,6 +879,19 @@ export async function getWhatsappDiagnostics(): Promise<WhatsappDiagnostics> {
   }
   if (operational.operationalMessage) {
     hints.push(operational.operationalMessage)
+  }
+
+  const pausedChats = await prisma.whatsappChatConfig.findMany({
+    where: { agentChatEnabled: true, agentPaused: true },
+    select: { displayNumber: true, agentPausedReason: true },
+    take: 5,
+  })
+  for (const chat of pausedChats) {
+    const reason =
+      chat.agentPausedReason === 'human_takeover'
+        ? 'human takeover'
+        : chat.agentPausedReason ?? 'paused'
+    hints.push(`Chat #${chat.displayNumber}: agent-paused (${reason}) — religue Resposta IA`)
   }
 
   return {
