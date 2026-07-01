@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Trash2, ChevronUp, ChevronDown, Minus } from 'lucide-react'
 import {
   cycleSortState,
@@ -11,6 +11,7 @@ import {
   type SortState,
 } from '@finance-ai/shared/utils'
 import { ToggleSwitch } from '@/components/ui/toggle-switch'
+import { ContactSyncBanner } from '@/components/permissions/contact-sync-banner'
 
 export type ChatPermissionRow = {
   chatId: string
@@ -86,6 +87,7 @@ export function ChatPermissionsView() {
   const [chatTypeFilter, setChatTypeFilter] = useState<ChatTypeFilter>('all')
   const [messageFilter, setMessageFilter] = useState<MessageFilter>('with')
   const limit = 50
+  const refreshDebounceRef = useRef<number | null>(null)
 
   const loadChats = useCallback(async () => {
     setError(null)
@@ -118,6 +120,13 @@ export function ChatPermissionsView() {
       setLoading(false)
     }
   }, [page, chatTypeFilter, messageFilter, search])
+
+  const scheduleRefreshFromSync = useCallback(() => {
+    if (refreshDebounceRef.current) window.clearTimeout(refreshDebounceRef.current)
+    refreshDebounceRef.current = window.setTimeout(() => {
+      void loadChats()
+    }, 1000)
+  }, [loadChats])
 
   const resolveNames = useCallback(async (chatIds?: string[]) => {
     setResolvingNames(true)
@@ -304,6 +313,7 @@ export function ChatPermissionsView() {
 
   return (
     <div className="space-y-6">
+      <ContactSyncBanner onProcessedIncrease={scheduleRefreshFromSync} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Permissões</h1>

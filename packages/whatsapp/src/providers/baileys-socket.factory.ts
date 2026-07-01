@@ -109,8 +109,15 @@ export async function createDefaultBaileysSocket(options: {
   contactNameResolver?: ContactNameResolver
   importHistoryEnabled?: boolean
   discoveryPolicy?: WhatsappDiscoveryPolicy
+  onHistorySyncProgress?: (input: {
+    phase: 'history'
+    processed: number
+    batchSize: number
+    isLatest: boolean
+  }) => void
 }): Promise<BaileysSocketEvents> {
   const importHistoryEnabled = options.importHistoryEnabled ?? false
+  let historyProcessedTotal = 0
   const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, Browsers } =
     await loadBaileysExports()
   const pino = await importFromNodeModules<(options: { level: string }) => unknown>('pino', 'pino.js')
@@ -206,6 +213,13 @@ export async function createDefaultBaileysSocket(options: {
             messageChatIds,
             options.onChatDiscovered,
           )
+      historyProcessedTotal += discovered
+      options.onHistorySyncProgress?.({
+        phase: 'history',
+        processed: historyProcessedTotal,
+        batchSize: discovered,
+        isLatest: data.isLatest ?? false,
+      })
       if (discovered > 0) {
         console.info('[RC-16/chat-sync]', {
           at: new Date().toISOString(),

@@ -78,6 +78,14 @@ import { deleteStoredMediaFile, createChatMediaCleanup } from '@/lib/media-stora
 import { createChatNameResolverPort } from './chat-name-resolution.adapter'
 import { ChatMediaStorage } from '@finance-ai/shared/storage'
 import { registerDailyReportJob } from '@/lib/jobs/daily-report.job'
+import {
+  completeSync,
+  markWhatsappConnected,
+  recordSyncedContact,
+  resetSyncOnDisconnect,
+  startSync,
+  type SyncedContactEntry,
+} from './contact-sync-tracker'
 
 export { WHATSAPP_RUNTIME_VERSION, checkRuntimeIntegrity, type RuntimeHealth } from './runtime-integrity'
 
@@ -174,6 +182,35 @@ function createRuntime(): WhatsappRuntime {
   const messageRepository = new WhatsappMessagePrismaRepository(prisma)
   const chatConfigRepository = new WhatsappChatConfigPrismaRepository(prisma)
   const ensureChatDiscoveredUseCase = new EnsureWhatsappChatDiscoveredUseCase(chatConfigRepository)
+  const executeEnsureChatDiscovered = ensureChatDiscoveredUseCase.execute.bind(ensureChatDiscoveredUseCase)
+  let historySyncActive = false
+  let skipMessageSourceRecord = false
+
+  const recordContactSynced = async (entry: Omit<SyncedContactEntry, 'at'>) => {
+    recordSyncedContact(entry)
+    const { getAppLogger } = await import('@/lib/logging/app-log-sink')
+    const configRow = await chatConfigRepository.findByChatId(entry.chatId)
+    getAppLogger().info('[whatsapp] Contato sincronizado', {
+      chatId: entry.chatId,
+      name: entry.name ?? null,
+      source: entry.source,
+      displayNumber: configRow?.displayNumber ?? null,
+    })
+  }
+
+  ensureChatDiscoveredUseCase.execute = async (chatId: string, name?: string | null) => {
+    const existed = await chatConfigRepository.findByChatId(chatId)
+    const created = await executeEnsureChatDiscovered(chatId, name)
+    if (!existed && !skipMessageSourceRecord) {
+      await recordContactSynced({
+        chatId,
+        name: name?.trim() ?? null,
+        source: 'message',
+      })
+    }
+    return created
+  }
+
   const backfillNamesUseCase = new BackfillWhatsappMessageNamesUseCase(messageRepository)
   const configNameCache = new Map<string, string>()
   let discoveryPolicy: WhatsappDiscoveryPolicy = {
@@ -223,8 +260,18 @@ function createRuntime(): WhatsappRuntime {
       recordOperationalEvent('groups.metadata')
       configNameCache.set(chatId, name)
       if (!(await shouldDiscoverChatConfig(chatId))) return
-      await ensureChatDiscoveredUseCase.execute(chatId, name)
-      await backfillNamesUseCase.execute({ chatId, chatName: name })
+      skipMessageSourceRecord = true
+      try {
+        await ensureChatDiscoveredUseCase.execute(chatId, name)
+        await backfillNamesUseCase.execute({ chatId, chatName: name })
+      } finally {
+        skipMessageSourceRecord = false
+      }
+      await recordContactSynced({
+        chatId,
+        name,
+        source: 'groups.upsert',
+      })
     },
   })
 
@@ -233,12 +280,21 @@ function createRuntime(): WhatsappRuntime {
     const trimmed = name?.trim()
     if (trimmed) configNameCache.set(chatId, trimmed)
     if (!(await shouldDiscoverChatConfig(chatId))) return
-    if (!trimmed) {
-      await ensureChatDiscoveredUseCase.execute(chatId)
-      return
+    const source: SyncedContactEntry['source'] = historySyncActive
+      ? 'messaging-history'
+      : 'chats.upsert'
+    skipMessageSourceRecord = true
+    try {
+      if (!trimmed) {
+        await ensureChatDiscoveredUseCase.execute(chatId)
+      } else {
+        await ensureChatDiscoveredUseCase.execute(chatId, trimmed)
+        await backfillNamesUseCase.execute({ chatId, chatName: trimmed })
+      }
+    } finally {
+      skipMessageSourceRecord = false
     }
-    await ensureChatDiscoveredUseCase.execute(chatId, trimmed)
-    await backfillNamesUseCase.execute({ chatId, chatName: trimmed })
+    await recordContactSynced({ chatId, name: trimmed ?? null, source })
   }
 
   const handleContactDiscovered = async (jid: string, name: string) => {
@@ -247,6 +303,11 @@ function createRuntime(): WhatsappRuntime {
     if (!jid.endsWith('@g.us')) {
       configNameCache.set(jid, name)
     }
+    await recordContactSynced({
+      chatId: jid,
+      name,
+      source: 'contacts.upsert',
+    })
   }
 
   let nameBootstrapDone = false
@@ -261,6 +322,8 @@ function createRuntime(): WhatsappRuntime {
   const handleConnectionOpen = async () => {
     if (nameBootstrapDone) return
     nameBootstrapDone = true
+    markWhatsappConnected()
+    startSync('bootstrap', 'Sincronizando contatos…')
     contactNameResolver.setOwnJid(getOwnJidFromAuthSession(config.whatsapp.sessionPath))
     await refreshDiscoveryPolicy()
     await refreshChatsWithMessages()
@@ -274,6 +337,7 @@ function createRuntime(): WhatsappRuntime {
       chatMediaStorage,
       discoveryPolicy,
     })
+    completeSync('Sincronização de contatos concluída')
     const ownJid = getOwnJidFromAuthSession(config.whatsapp.sessionPath)
     const repair = await repairHistoricalMessages({
       prisma,
@@ -304,6 +368,17 @@ function createRuntime(): WhatsappRuntime {
       return settings ? !settings.whatsappIgnoreHistory : false
     },
     getDiscoveryPolicy: async () => loadWhatsappDiscoveryPolicy(prisma),
+    onHistorySyncProgress: (input) => {
+      if (input.batchSize > 0) {
+        startSync('history', 'Importando histórico do WhatsApp…')
+      }
+      if (input.isLatest) {
+        historySyncActive = false
+        completeSync('Histórico sincronizado')
+      } else {
+        historySyncActive = true
+      }
+    },
     shouldEnrichGroupMetadata: async (chatId) => {
       await refreshDiscoveryPolicy()
       if (discoveryPolicy.syncGroupsEnabled) return true
@@ -575,6 +650,12 @@ function ensureWhatsappPipelinesRegistered(): void {
 
   runtime.provider.onStatusChange((status) => {
     recordOperationalEvent(`connection.${status.status}`)
+    if (status.status === 'connected') {
+      markWhatsappConnected()
+    }
+    if (status.status === 'disconnected') {
+      resetSyncOnDisconnect()
+    }
     for (const listener of globalForWhatsapp.whatsappStatusListeners ?? []) {
       listener(status)
     }

@@ -64,6 +64,12 @@ export type BaileysSocketFactory = (options: {
   contactNameResolver?: ContactNameResolver
   importHistoryEnabled?: boolean
   discoveryPolicy?: WhatsappDiscoveryPolicy
+  onHistorySyncProgress?: (input: {
+    phase: 'history'
+    processed: number
+    batchSize: number
+    isLatest: boolean
+  }) => void
 }) => Promise<BaileysSocketEvents>
 
 export type BaileysWhatsappProviderOptions = {
@@ -77,6 +83,12 @@ export type BaileysWhatsappProviderOptions = {
   getImportHistoryEnabled?: () => boolean | Promise<boolean>
   shouldEnrichGroupMetadata?: (chatId: string) => boolean | Promise<boolean>
   getDiscoveryPolicy?: () => WhatsappDiscoveryPolicy | Promise<WhatsappDiscoveryPolicy>
+  onHistorySyncProgress?: (input: {
+    phase: 'history'
+    processed: number
+    batchSize: number
+    isLatest: boolean
+  }) => void
 }
 
 const defaultStatus = (): WhatsappStatus => ({
@@ -110,6 +122,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
   private readonly getImportHistoryEnabled?: () => boolean | Promise<boolean>
   private readonly shouldEnrichGroupMetadata?: (chatId: string) => boolean | Promise<boolean>
   private readonly getDiscoveryPolicy?: () => WhatsappDiscoveryPolicy | Promise<WhatsappDiscoveryPolicy>
+  private readonly onHistorySyncProgress?: BaileysWhatsappProviderOptions['onHistorySyncProgress']
 
   constructor(options: BaileysWhatsappProviderOptions = {}) {
     this.authDir = options.authDir ?? config.whatsapp.sessionPath
@@ -122,6 +135,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
     this.getImportHistoryEnabled = options.getImportHistoryEnabled
     this.shouldEnrichGroupMetadata = options.shouldEnrichGroupMetadata
     this.getDiscoveryPolicy = options.getDiscoveryPolicy
+    this.onHistorySyncProgress = options.onHistorySyncProgress
   }
 
   async connect(): Promise<void> {
@@ -232,6 +246,7 @@ export class BaileysWhatsappProvider implements WhatsappProvider {
       discoveryPolicy: this.getDiscoveryPolicy
         ? await Promise.resolve(this.getDiscoveryPolicy())
         : undefined,
+      onHistorySyncProgress: this.onHistorySyncProgress,
     })
     this.currentSocketInstanceId = socketInstanceId
   }

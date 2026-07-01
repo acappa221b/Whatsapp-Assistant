@@ -6,6 +6,8 @@ import { resolveMessageDisplayContent, formatChatListLabel } from '@finance-ai/s
 import { shouldStickToBottom } from '@/lib/messages/message-scroll'
 import { Button } from '@/components/ui/button'
 import { AudioMessageBubble } from '@/components/messages/audio-message-bubble'
+import { OutboundMessageBubble } from '@/components/messages/outbound-message-bubble'
+import { useMessageSendQueue, type OutboundMessage } from '@/hooks/use-message-send-queue'
 
 type ChatSummary = {
   chatId: string
@@ -53,6 +55,21 @@ function isGroupChat(chatId: string): boolean {
   return chatId.endsWith('@g.us')
 }
 
+function toOptimisticArchiveMessage(item: OutboundMessage): ArchiveMessage {
+  return {
+    id: `outbound-${item.id}`,
+    chatId: item.chatId,
+    chatName: null,
+    sender: 'me',
+    senderId: 'me',
+    senderName: 'Você',
+    content: item.content,
+    messageType: 'TEXT',
+    receivedAt: item.createdAt,
+    fromMe: true,
+  }
+}
+
 export function MessageArchiveView() {
   const [chats, setChats] = useState<ChatSummary[]>([])
   const [messages, setMessages] = useState<ArchiveMessage[]>([])
@@ -62,7 +79,6 @@ export function MessageArchiveView() {
   const [chatsError, setChatsError] = useState<string | null>(null)
   const [messagesError, setMessagesError] = useState<string | null>(null)
   const [composerText, setComposerText] = useState('')
-  const [sending, setSending] = useState(false)
   const [whatsappConnected, setWhatsappConnected] = useState(false)
   const userSelectedChat = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -131,6 +147,28 @@ export function MessageArchiveView() {
     }
   }, [])
 
+  const { enqueue, retry, items: outboundQueue, countsByChat } = useMessageSendQueue({
+    send: async (chatId, content) => {
+      const response = await fetch(`/api/whatsapp/chats/${encodeURIComponent(chatId)}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? 'Falha ao enviar')
+      }
+      return (await response.json()) as { id: string }
+    },
+    onSent: (chatId) => {
+      if (chatId === selectedChatId) {
+        void loadMessages(chatId)
+        scrollToBottom('smooth')
+      }
+      void loadChats()
+    },
+  })
+
   useEffect(() => {
     void loadChats()
     const interval = setInterval(() => void loadChats(), 8000)
@@ -153,6 +191,15 @@ export function MessageArchiveView() {
   }, [chats, selectedChatId])
 
   const selectedChat = chats.find((chat) => chat.chatId === selectedChatId)
+  const pendingForChat = outboundQueue.filter(
+    (item) => item.chatId === selectedChatId && item.status !== 'sent',
+  )
+  const displayMessages = [
+    ...messages.map((message) => ({ item: null as OutboundMessage | null, message })),
+    ...pendingForChat.map((item) => ({ item, message: toOptimisticArchiveMessage(item) })),
+  ].sort(
+    (a, b) => new Date(a.message.receivedAt).getTime() - new Date(b.message.receivedAt).getTime(),
+  )
   const hasPendingAudio =
     Boolean(selectedChat?.audioProcessingEnabled) &&
     selectedChat?.lastMessagePreview.includes('transcrevendo')
@@ -214,28 +261,12 @@ export function MessageArchiveView() {
     stickToBottomRef.current = true
   }
 
-  async function sendMessage() {
+  function handleSend() {
     const text = composerText.trim()
-    if (!text || !selectedChatId || sending) return
-    setSending(true)
-    try {
-      const response = await fetch(`/api/whatsapp/chats/${encodeURIComponent(selectedChatId)}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text }),
-      })
-      if (!response.ok) {
-        const data = (await response.json()) as { error?: string }
-        setMessagesError(data.error ?? 'Falha ao enviar')
-        return
-      }
-      setComposerText('')
-      stickToBottomRef.current = true
-      await loadMessages(selectedChatId)
-      scrollToBottom('smooth')
-    } finally {
-      setSending(false)
-    }
+    if (!text || !selectedChatId || !whatsappConnected) return
+    setComposerText('')
+    stickToBottomRef.current = true
+    enqueue(selectedChatId, text)
   }
 
   return (
@@ -266,6 +297,10 @@ export function MessageArchiveView() {
             ) : (
               chats.map((chat) => {
                 const active = chat.chatId === selectedChatId
+                const outbound = countsByChat[chat.chatId]
+                const isSending = Boolean(
+                  outbound && (outbound.queued > 0 || outbound.sending > 0),
+                )
                 return (
                   <button
                     key={chat.chatId}
@@ -285,7 +320,13 @@ export function MessageArchiveView() {
                           {formatTime(chat.lastMessageAt)}
                         </span>
                       </div>
-                      <p className="truncate text-xs text-muted-foreground">{chat.lastMessagePreview}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {isSending ? (
+                          <span className="text-neon-orange">enviando…</span>
+                        ) : (
+                          chat.lastMessagePreview
+                        )}
+                      </p>
                     </div>
                   </button>
                 )
@@ -315,10 +356,19 @@ export function MessageArchiveView() {
               <p className="text-sm text-destructive">Erro ao carregar mensagens: {messagesError}</p>
             ) : !selectedChatId ? (
               <p className="text-sm text-muted-foreground">Selecione um chat à esquerda.</p>
-            ) : messages.length === 0 ? (
+            ) : displayMessages.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma mensagem neste chat.</p>
             ) : (
-              messages.map((message) => {
+              displayMessages.map(({ item, message }) => {
+                if (item) {
+                  return (
+                    <OutboundMessageBubble
+                      key={item.id}
+                      item={item}
+                      onRetry={retry}
+                    />
+                  )
+                }
                 const content = displayContent(message)
                 return (
                   <div
@@ -366,7 +416,7 @@ export function MessageArchiveView() {
             <div className="flex items-end gap-2">
               <textarea
                 rows={1}
-                disabled={!selectedChatId || !whatsappConnected || sending}
+                disabled={!selectedChatId || !whatsappConnected}
                 placeholder={
                   !whatsappConnected
                     ? 'WhatsApp desconectado — conecte em Configurações → WhatsApp'
@@ -378,7 +428,7 @@ export function MessageArchiveView() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    void sendMessage()
+                    void handleSend()
                   }
                 }}
               />
@@ -386,8 +436,8 @@ export function MessageArchiveView() {
                 type="button"
                 size="sm"
                 className="h-10 w-10 shrink-0 p-0"
-                disabled={!selectedChatId || !whatsappConnected || sending || !composerText.trim()}
-                onClick={() => void sendMessage()}
+                disabled={!selectedChatId || !whatsappConnected || !composerText.trim()}
+                onClick={() => handleSend()}
                 aria-label="Enviar"
               >
                 <Send className="h-4 w-4" />

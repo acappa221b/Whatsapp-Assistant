@@ -1,7 +1,7 @@
 # WhatsApp Assistant
 
-**Versão:** 1.7.2-rc27  
-**Fase:** RC-26/27 fresh clone Prisma bootstrap (pnpm path fix)  
+**Versão:** 1.7.3-rc28  
+**Fase:** RC-28 outbound queue + permissions sync progress  
 **Porta padrão:** [http://localhost:4000](http://localhost:4000)
 
 Assistente de memória conversacional via WhatsApp — captura, organização, indexação e transcrição de conversas para histórico de longo prazo.
@@ -283,9 +283,15 @@ Requer **OpenAI Whisper** — em **Configurações → Provedores IA → Provedo
 - Se falhar, a bolha mostra erro amigável e **Tentar novamente**
 - Ao habilitar Áudio em um chat, áudios recentes pendentes são reprocessados
 
-### Mensagens (RC-25)
+### Mensagens (RC-25 / RC-28)
 
 A lista de chats segue a ordem da última mensagem (mais recente no topo), como no WhatsApp.
+
+Após ENTER, a caixa libera na hora. Mensagens entram numa fila e são enviadas em ordem (bolhas otimistas enquanto envia).
+
+### Permissões — sync (RC-28)
+
+Ao conectar o WhatsApp, o banner mostra o progresso da sincronização. Chats novos surgem principalmente quando há mensagens (política message-driven, RC-22A).
 
 ### Multi Mensagem (RC-25)
 
@@ -295,7 +301,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 ## Próximo passo
 
-**RC-25** entrega ordenação de chats, custos Chat IA no dashboard, gate de áudio Whisper e envio Multi Mensagem.
+**RC-28** entrega fila de envio no composer (Mensagens) e banner de progresso de sincronização em Permissões.
 
 ---
 
@@ -312,6 +318,7 @@ Selecione chats habilitados e envie a mesma mensagem para todos. Há intervalo d
 
 | Versão | Descrição |
 |--------|-----------|
+| 1.7.3-rc28 | RC-28: fila de envio no composer, progresso de sync em Permissões, API sync-status |
 | 1.7.2-rc27 | RC-27: fix detecção Prisma client no layout pnpm (launcher não abortava após generate) |
 | 1.7.1-rc26 | RC-26: Prisma generate em clone novo, API logs RC-20, health gate database |
 | 1.7.0-rc25 | RC-25: sort chats por recência, tooltip custo tokens, custos Chat IA, gate áudio Whisper, Multi Mensagem |
